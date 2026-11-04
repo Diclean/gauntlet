@@ -1,0 +1,11 @@
+// Dares — Release configuration.
+//
+// NOTE: `//` starts a comment inside an .xcconfig file, so the `https:/$()/` trick is used to
+// embed `//` in the URL. `$( )` expands to an empty string at build time.
+
+API_BASE_URL = https:/$()/dares.example.workers.dev
+
+SWIFT_COMPILATION_MODE = wholemodule
+SWIFT_OPTIMIZATION_LEVEL = -O
+ENABLE_TESTABILITY = NO
+VALIDATE_PRODUCT = YES

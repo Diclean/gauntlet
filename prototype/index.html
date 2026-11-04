@@ -1,0 +1,2122 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Receipts — clickable prototype</title>
+<style>
+/* Anton (SIL OFL 1.1) bundled locally so the prototype renders offline */
+@font-face{
+  font-family:'Anton';font-style:normal;font-weight:400;font-display:block;
+  src:url('fonts/Anton-Regular.woff2') format('woff2');
+}
+</style>
+<style>
+/* ============================================================
+   REVIEW CHROME (outside the phone) — deliberately not app UI
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+:root{
+  --page-bg:#E4E4DF; --page-fg:#0E0E0E; --page-soft:rgba(14,14,14,.58);
+  --page-line:rgba(14,14,14,.22); --page-card:#F7F7F3;
+}
+html[data-theme="dark"]{
+  --page-bg:#0C0C0E; --page-fg:#EDEDE8; --page-soft:rgba(237,237,232,.55);
+  --page-line:rgba(237,237,232,.2); --page-card:#161618;
+}
+body{
+  background:var(--page-bg); color:var(--page-fg);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; min-height:100vh;
+}
+::selection{background:#FFE14D;color:#0E0E0E}
+.stage{display:flex;gap:34px;align-items:flex-start;justify-content:center;padding:34px 22px 70px;flex-wrap:wrap}
+.device-col{display:flex;flex-direction:column;align-items:center;gap:12px;flex:0 0 auto}
+.device{
+  width:417px;height:876px;border-radius:58px;background:#08080A;padding:12px;position:relative;
+  box-shadow:0 0 0 2px #33333A,0 2px 0 #55555E inset,0 34px 70px rgba(0,0,0,.38);
+}
+.device__foot{font:500 11px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--page-soft);display:flex;gap:12px;align-items:center}
+.device__foot b{font-weight:700;color:var(--page-fg)}
+.panel{width:272px;flex:0 0 272px;position:sticky;top:34px}
+.panel h1{font-family:Anton,sans-serif;font-size:30px;letter-spacing:-.01em;margin:0;text-transform:uppercase;line-height:.95}
+.panel .tagline{font:400 12px/1.35 ui-monospace,"SF Mono",Menlo,monospace;color:var(--page-soft);margin:6px 0 16px}
+.panel__sec{border-top:2px solid var(--page-line);padding:12px 0 14px}
+.panel__sec h2{font:700 10px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--page-soft);margin:0 0 10px}
+.panel__row{display:flex;gap:8px;flex-wrap:wrap}
+.chipbtn{
+  font:600 11px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.04em;text-transform:uppercase;
+  padding:8px 10px;border:1.5px solid var(--page-line);border-radius:4px;background:var(--page-card);color:var(--page-fg);cursor:pointer;
+}
+.chipbtn:hover{border-color:var(--page-fg)}
+.chipbtn[aria-pressed="true"]{background:var(--page-fg);border-color:var(--page-fg);color:var(--page-bg)}
+.jump{display:flex;flex-direction:column;gap:2px;max-height:min(52vh,460px);overflow:auto;padding-right:4px}
+.jump::-webkit-scrollbar{width:6px}
+.jump::-webkit-scrollbar-thumb{background:var(--page-line);border-radius:3px}
+.jump__grp{font:700 9px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--page-soft);margin:10px 0 4px}
+.jump__b{
+  text-align:left;font:600 12px/1.2 inherit;padding:7px 9px;border:1.5px solid transparent;border-radius:4px;
+  background:none;color:var(--page-fg);cursor:pointer;display:block;width:100%;
+}
+.jump__b:hover{background:var(--page-card)}
+.jump__b[aria-current="true"]{background:#0E0E0E;color:#FFF;border-color:#0E0E0E}
+html[data-theme="dark"] .jump__b[aria-current="true"]{background:#EDEDE8;color:#0E0E0E;border-color:#EDEDE8}
+.panel__note{font:400 11px/1.45 ui-monospace,"SF Mono",Menlo,monospace;color:var(--page-soft);margin:10px 0 0}
+
+/* ============================================================
+   THE APP
+   ============================================================ */
+.device{
+  --ink:#0E0E0E; --paper:#FFFFFF; --paper2:#F2F2EE;
+  --brand:#FFE14D; --approve:#12B76A; --reject:#F04438; --streak:#FF6B00;
+  --on-brand:#0E0E0E; --on-color:#0E0E0E;
+  --muted:color-mix(in srgb,var(--ink) 52%,var(--paper));
+  --faint:color-mix(in srgb,var(--ink) 30%,var(--paper));
+  --hair:color-mix(in srgb,var(--ink) 22%,var(--paper));
+  --tape-y:#FFE14D; --tape-k:#0E0E0E;
+}
+html[data-theme="dark"] .device{
+  --ink:#F5F5F2; --paper:#0E0E0E; --paper2:#1A1A1A;
+  --approve:#32D583; --reject:#F97066; --streak:#FF8A33;
+}
+.screen{
+  position:relative;width:393px;height:852px;border-radius:46px;overflow:hidden;
+  background:var(--paper);color:var(--ink);display:flex;flex-direction:column;isolation:isolate;
+}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:118px;height:34px;border-radius:20px;background:#000;z-index:70;pointer-events:none}
+.statusbar{
+  position:absolute;top:0;left:0;right:0;height:52px;z-index:65;display:flex;align-items:center;
+  justify-content:space-between;padding:14px 26px 0;font:600 15px/1 ui-monospace,"SF Mono",Menlo,monospace;pointer-events:none;
+}
+.statusbar--light{color:#fff}
+.statusbar__r{display:flex;align-items:center;gap:5px}
+.app{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;position:relative;scroll-behavior:auto}
+.app.has-tabs{padding-bottom:100px}
+.app::-webkit-scrollbar{width:0}
+.home{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:138px;height:5px;border-radius:3px;background:var(--ink);opacity:.35;z-index:66;pointer-events:none}
+
+/* ---------- nav ---------- */
+.topbar{
+  position:sticky;top:0;z-index:30;padding-top:52px;
+  background:color-mix(in srgb,var(--paper) 82%,transparent);
+  -webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+  border-bottom:2px solid transparent;transition:border-color .18s ease;
+}
+.topbar.is-scrolled{border-bottom-color:var(--ink)}
+.topbar__row{height:44px;display:flex;align-items:center;gap:6px;padding:0 8px 0 6px;position:relative}
+.tb-title{
+  position:absolute;left:0;right:0;text-align:center;pointer-events:none;
+  font-family:Anton,sans-serif;font-size:16px;letter-spacing:.01em;text-transform:uppercase;
+  opacity:0;transition:opacity .18s ease;
+}
+.topbar.is-scrolled .tb-title{opacity:1}
+.topbar.is-scrolled .tb-group{opacity:.45}
+.tb-btn{
+  width:38px;height:38px;display:grid;place-items:center;border:2px solid transparent;border-radius:8px;
+  background:none;color:var(--ink);cursor:pointer;padding:0;
+}
+.tb-btn:active{background:var(--paper2)}
+.tb-group{
+  display:inline-flex;align-items:center;gap:5px;max-width:172px;border:2px solid var(--ink);border-radius:6px;
+  padding:5px 8px;background:var(--paper);color:var(--ink);cursor:pointer;font:700 12px/1 inherit;letter-spacing:.02em;
+  text-transform:uppercase;transition:opacity .18s ease;
+}
+.tb-group span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-demo{
+  font:700 9px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.14em;border:2px solid var(--ink);
+  border-radius:4px;padding:4px 5px;opacity:.8;
+}
+.tb-spacer{flex:1}
+.ico{width:22px;height:22px;display:block;fill:currentColor}
+.ico--sm{width:17px;height:17px}
+
+/* ---------- type ---------- */
+.h1{font-family:Anton,sans-serif;font-size:40px;line-height:.92;letter-spacing:-.015em;text-transform:uppercase;margin:8px 0 0;padding:0 16px}
+.h2{font-family:Anton,sans-serif;font-size:26px;line-height:1;letter-spacing:-.005em;text-transform:uppercase;margin:26px 0 0;padding:0 16px}
+.h3{font-family:Anton,sans-serif;font-size:19px;line-height:1.05;letter-spacing:.005em;text-transform:uppercase;margin:0;padding:0}
+.meta{font:600 11px/1.3 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.meta--ink{color:var(--ink)}
+.body{padding:8px 16px 0;font-size:15px;line-height:1.45}
+.small{font-size:13px;line-height:1.4;color:var(--muted)}
+.rule{height:2px;background:var(--ink);margin:0}
+.hair{height:2px;background:var(--hair)}
+.pad{padding-left:16px;padding-right:16px}
+
+/* ---------- buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 16px;
+  border:2px solid var(--ink);border-radius:6px;background:var(--paper);color:var(--ink);
+  font:700 14px/1 inherit;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;text-align:center;
+}
+.btn:active{transform:translate(2px,2px)}
+.btn--primary{background:var(--brand);color:var(--on-brand);box-shadow:4px 4px 0 var(--ink);text-transform:uppercase}
+.btn--primary:active{box-shadow:1px 1px 0 var(--ink)}
+.btn--ghost{background:transparent}
+.btn--danger{color:var(--reject);border-color:var(--reject)}
+.btn--approve{background:var(--approve);color:var(--on-color);border-color:var(--ink);box-shadow:4px 4px 0 var(--ink)}
+.btn--reject{background:var(--reject);color:var(--on-color);border-color:var(--ink);box-shadow:4px 4px 0 var(--ink)}
+.btn--approve:active,.btn--reject:active{box-shadow:1px 1px 0 var(--ink)}
+.btn--block{display:flex;width:100%}
+.btn--sm{min-height:36px;padding:0 11px;font-size:12px;border-radius:5px}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.btnrow{display:flex;gap:10px;padding:0 16px}
+
+/* ---------- tags, chips, stamps ---------- */
+.tag{display:inline-flex;align-items:center;gap:5px;font:700 10px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.1em;text-transform:uppercase}
+.tag::before{content:"";width:9px;height:9px;background:currentColor;flex:0 0 9px}
+.tag--easy{color:var(--approve)} .tag--medium{color:var(--streak)} .tag--hard{color:var(--reject)}
+.chip{
+  display:inline-block;font:700 10px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;
+  border:2px solid var(--hair);border-radius:4px;padding:4px 6px;color:var(--muted);
+}
+.chip--todo{border-style:dashed}
+.chip--pending{border-color:var(--ink);color:var(--ink)}
+.chip--accepted{border-color:var(--approve);color:var(--approve)}
+.chip--rejected{border-color:var(--reject);color:var(--reject)}
+.pts{font:700 13px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.02em}
+.stamp{
+  position:relative;display:inline-block;padding:7px 12px 6px;border:3px solid var(--c,var(--ink));border-radius:4px;
+  font-family:Anton,sans-serif;font-size:21px;line-height:.95;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--c,var(--ink));transform:rotate(-8deg);isolation:isolate;background:var(--paper);
+  box-shadow:0 0 0 1.5px var(--c,var(--ink)),inset 0 0 0 1.5px var(--c,var(--ink));
+}
+.stamp::after{
+  content:"";position:absolute;inset:0;border-radius:2px;pointer-events:none;opacity:.22;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='.5'/></svg>");
+}
+.stamp--ok{--c:var(--approve)} .stamp--no{--c:var(--reject)} .stamp--pending{--c:var(--ink)}
+.stamp--sm{font-size:14px;padding:4px 8px 3px;border-width:2px}
+.stamp--big{font-size:40px;padding:12px 20px 10px}
+@keyframes slam{0%{transform:rotate(-16deg) scale(1.5);opacity:0}55%{opacity:1}100%{transform:rotate(-8deg) scale(1);opacity:1}}
+.stamp--slam{animation:slam .34s cubic-bezier(.2,.9,.25,1) both}
+
+/* ---------- hazard tape ---------- */
+.hazard{
+  margin:14px 16px 0;border:2px solid var(--ink);border-radius:6px;overflow:hidden;
+}
+.hazard__tape{
+  height:12px;background:repeating-linear-gradient(45deg,var(--tape-y) 0 9px,var(--tape-k) 9px 18px);
+  border-bottom:2px solid var(--ink);
+}
+.hazard__bar{background:var(--tape-k);color:var(--tape-y);font-family:Anton,sans-serif;font-size:17px;letter-spacing:.03em;text-transform:uppercase;text-align:center;padding:8px 10px}
+.hazard__sub{background:var(--paper);color:var(--ink);font:700 10px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;text-align:center;padding:7px 10px;border-top:2px solid var(--ink)}
+
+/* ---------- numbered challenge list ---------- */
+.clist{margin:14px 0 0;border-top:2px solid var(--ink)}
+.crow{
+  width:100%;display:grid;grid-template-columns:54px 1fr auto;gap:10px;align-items:start;
+  padding:14px 16px;border:0;border-bottom:2px solid var(--ink);background:none;color:var(--ink);
+  text-align:left;cursor:pointer;font:inherit;
+}
+.crow:active{background:var(--paper2)}
+.crow__n{font-family:Anton,sans-serif;font-size:34px;line-height:.85;letter-spacing:-.02em;opacity:.92}
+.crow__title{font-family:Anton,sans-serif;font-size:18px;line-height:1.06;letter-spacing:.005em;text-transform:uppercase;display:block}
+.crow__meta{display:flex;align-items:center;gap:10px;margin-top:7px;flex-wrap:wrap}
+.crow__right{display:flex;flex-direction:column;align-items:flex-end;gap:7px;padding-top:3px}
+.crow__due{font:700 10px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+
+/* ---------- fields ---------- */
+.field{padding:0 16px;margin-top:18px}
+.field__label{display:block;font:700 10px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.input{
+  width:100%;min-height:50px;border:2px solid var(--ink);border-radius:6px;background:var(--paper);color:var(--ink);
+  font:600 16px/1.2 inherit;padding:0 13px;
+}
+.input::placeholder{color:var(--faint)}
+.input:focus{outline:3px solid var(--ink);outline-offset:2px}
+.input--code{font:700 30px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.42em;text-align:center;text-transform:uppercase;padding:0 0 0 .42em}
+.input--mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.1em}
+.hint{font:500 11px/1.4 ui-monospace,"SF Mono",Menlo,monospace;color:var(--muted);margin-top:7px;letter-spacing:.02em}
+.stepper{display:flex;align-items:stretch;border:2px solid var(--ink);border-radius:6px;overflow:hidden;width:170px}
+.stepper button{width:52px;border:0;background:var(--paper2);color:var(--ink);font:700 22px/1 inherit;cursor:pointer}
+.stepper button:active{background:var(--ink);color:var(--paper)}
+.stepper__val{flex:1;display:grid;place-items:center;font:700 20px/1 ui-monospace,"SF Mono",Menlo,monospace;border-left:2px solid var(--ink);border-right:2px solid var(--ink);background:var(--paper)}
+
+/* ---------- groups ---------- */
+.grow{
+  width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;text-align:left;
+  padding:14px 16px;border:0;border-bottom:2px solid var(--ink);background:none;color:var(--ink);cursor:pointer;font:inherit;
+}
+.grow:active{background:var(--paper2)}
+.grow__name{font-family:Anton,sans-serif;font-size:21px;line-height:1;text-transform:uppercase;letter-spacing:.005em;display:block}
+.grow__meta{display:flex;gap:12px;margin-top:6px;align-items:center;flex-wrap:wrap}
+.gav{
+  width:44px;height:44px;display:grid;place-items:center;border:2px solid var(--ink);border-radius:6px;
+  background:var(--paper2);font-size:22px;line-height:1;
+}
+.gav--lg{width:76px;height:76px;font-size:38px;border-radius:8px}
+
+/* ---------- vote ---------- */
+.stack{position:relative;margin:12px 16px 34px;height:404px}
+.vcard{
+  position:absolute;left:0;right:0;top:0;height:404px;border:2px solid var(--ink);border-radius:0;overflow:hidden;
+  background:var(--paper2);box-shadow:4px 4px 0 var(--ink);touch-action:none;user-select:none;-webkit-user-select:none;
+}
+.vcard__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.vcard__scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.6) 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,0) 56%,rgba(0,0,0,.78) 100%)}
+.vcard__top{position:absolute;top:0;left:0;right:0;padding:11px 12px;display:flex;align-items:center;gap:9px;color:#fff}
+.vcard__who{display:block;font:700 15px/1.1 inherit;text-transform:uppercase;letter-spacing:.01em}
+.vcard__chal{display:block;font:600 10px/1.3 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.09em;text-transform:uppercase;opacity:.85;margin-top:3px}
+.vcard__cap{position:absolute;left:12px;right:12px;bottom:12px;color:#fff;font-size:14px;line-height:1.3;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.vcard__stamp{
+  position:absolute;top:44%;left:50%;transform:translate(-50%,-50%) rotate(-12deg);
+  font-family:Anton,sans-serif;font-size:34px;letter-spacing:.05em;text-transform:uppercase;
+  padding:8px 16px;border:4px solid currentColor;border-radius:6px;opacity:0;pointer-events:none;
+  box-shadow:0 0 0 2px currentColor,inset 0 0 0 2px currentColor;
+}
+.vcard__stamp--ok{color:#12B76A} .vcard__stamp--no{color:#F04438}
+.vcard__verdict{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.vcard__verdict .stamp{background:color-mix(in srgb,var(--paper) 82%,transparent)}
+.vcard__mine{position:absolute;top:12px;right:12px}
+.vcontrols{padding:14px 16px 0}
+.tally{display:flex;align-items:center;justify-content:space-between;gap:10px;border:2px solid var(--ink);border-radius:6px;padding:9px 11px;background:var(--paper2)}
+.tally__n{font:700 15px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.02em}
+.vote_acts{display:flex;gap:12px;margin-top:12px}
+.vote_acts .btn{flex:1;min-height:56px;font-size:16px}
+.vote_hint{font:500 10px/1.4 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:center;margin-top:11px}
+
+/* ---------- feed ---------- */
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:12px 16px 0}
+.fcell{position:relative;border:2px solid var(--ink);border-radius:6px;overflow:hidden;background:var(--paper);padding:5px 5px 0}
+.fcell__shot{position:relative;overflow:hidden;background:var(--paper2)}
+.fcell__img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;border-radius:0}
+.fcell--locked .fcell__img{filter:blur(16px) grayscale(.35);transform:scale(1.06)}
+.fcell__lock{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:10px;background:color-mix(in srgb,var(--paper) 42%,transparent)}
+.fcell__lock b{display:block;font-family:Anton,sans-serif;font-size:16px;text-transform:uppercase;letter-spacing:.03em;line-height:1.05}
+.fcell__shot .stamp{
+  position:absolute;right:8px;bottom:10px;font-size:13px;padding:4px 7px 3px;border-width:2px;
+  background:var(--paper);box-shadow:0 0 0 1.5px var(--c,var(--ink)),inset 0 0 0 1.5px var(--c,var(--ink)),2px 2px 0 rgba(0,0,0,.35);
+}
+.fcell__foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 3px;border-top:2px solid var(--ink);margin-top:5px;background:var(--paper)}
+.flist{padding:0 16px}
+.frow{display:grid;grid-template-columns:62px 1fr auto;gap:11px;align-items:center;padding:11px 0;border-bottom:2px solid var(--ink)}
+.frow__thumb{position:relative;width:62px;height:78px}
+.frow__img{width:100%;height:100%;object-fit:cover;border:2px solid var(--ink);border-radius:0;display:block}
+.frow__body{min-width:0}
+.frow__stamp{margin-top:7px;display:inline-block}
+.seg{display:flex;border:2px solid var(--ink);border-radius:6px;overflow:hidden;width:172px;margin:12px 16px 0}
+.seg button{flex:1;border:0;background:var(--paper);color:var(--ink);font:700 11px/1 inherit;letter-spacing:.1em;text-transform:uppercase;padding:9px 0;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+html[data-theme="dark"] .seg button[aria-pressed="true"]{background:var(--ink);color:#0E0E0E}
+
+/* ---------- board ---------- */
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:26px 16px 0;height:224px}
+.pod{flex:1;max-width:104px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:7px}
+.pod__box{width:100%;border:2px solid var(--ink);border-bottom:0;border-radius:6px 6px 0 0;background:var(--paper2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 4px}
+.pod--1 .pod__box{height:148px;background:var(--ink);color:var(--paper)}
+.pod--2 .pod__box{height:116px}
+.pod--3 .pod__box{height:92px}
+.pod__n{font-family:Anton,sans-serif;font-size:30px;line-height:.9}
+.pod__pts{font:700 11px/1 ui-monospace,"SF Mono",Menlo,monospace}
+.pod__name{font:700 10px/1.2 inherit;text-transform:uppercase;text-align:center;letter-spacing:.04em}
+.pod__av{font-size:26px;line-height:1}@keyframes rise{from{transform:translateY(26px);opacity:0}to{transform:translateY(0);opacity:1}}
+.pod{animation:rise .5s cubic-bezier(.2,.85,.3,1) both}
+.pod--2{animation-delay:.09s} .pod--3{animation-delay:.18s}
+.rank{display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:2px solid var(--ink)}
+.rank__n{font-family:Anton,sans-serif;font-size:22px;width:28px;flex:0 0 28px}
+.rank__who{flex:1;min-width:0}
+.rank__name{font:700 14px/1.15 inherit;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.rank__pts{font:700 14px/1 ui-monospace,"SF Mono",Menlo,monospace;text-align:right}
+.rank__pts small{display:block;font:600 9px/1 ui-monospace,monospace;letter-spacing:.1em;color:var(--muted);margin-top:4px}
+.move{font:700 11px/1 ui-monospace,monospace;letter-spacing:.02em}
+.move--up{color:var(--approve)} .move--down{color:var(--reject)} .move--flat{color:var(--muted)}
+.flame{color:var(--streak);display:inline-flex;align-items:center;gap:3px;font:700 11px/1 ui-monospace,monospace}
+.flame svg{width:13px;height:13px;fill:currentColor}
+.blocks{display:flex;gap:6px;padding:12px 16px 0}
+.block{flex:1;height:34px;border:2px solid var(--ink);border-radius:4px;background:var(--ink);position:relative;overflow:hidden}
+.block--miss{background:var(--paper2)}
+.block--miss::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(102deg,transparent 44%,var(--ink) 45%,var(--ink) 50%,transparent 51%),
+             linear-gradient(78deg,transparent 58%,var(--ink) 59%,var(--ink) 63%,transparent 64%);
+}
+.block--miss::before{content:"";position:absolute;left:0;right:0;top:50%;height:2px;background:var(--ink);transform:rotate(-6deg)}
+
+/* ---------- receipt ---------- */
+.receipt-wrap{padding:14px 16px 30px;background:var(--paper2);min-height:100%}
+.receipt{
+  background:#FFFDF7;color:#141414;margin:0 auto;max-width:330px;padding:16px 16px 22px;
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;box-shadow:4px 4px 0 rgba(0,0,0,.45);position:relative;
+}
+.receipt__brand{font-family:Anton,sans-serif;font-size:26px;letter-spacing:.01em;text-align:center;text-transform:uppercase}
+.receipt__sub{text-align:center;font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px;opacity:.7}
+.receipt__rule{border-top:2px dashed #141414;margin:11px 0}
+.receipt__row{display:flex;justify-content:space-between;gap:10px;font-size:12px;line-height:1.5}
+.receipt__row b{font-weight:700}
+.receipt__row span:first-child{opacity:.75}
+.receipt__total{display:flex;justify-content:space-between;font-family:Anton,sans-serif;font-size:24px;letter-spacing:.01em;margin-top:6px}
+.receipt__foot{text-align:center;font-size:10px;letter-spacing:.18em;text-transform:uppercase;margin-top:12px;font-weight:700}
+
+/* ---------- members / settings ---------- */
+.member{display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:2px solid var(--ink)}
+.member__name{flex:1;font:700 15px/1.1 inherit;text-transform:uppercase;letter-spacing:.01em}
+.badge{font:700 9px/1 ui-monospace,monospace;letter-spacing:.12em;border:2px solid var(--ink);border-radius:4px;padding:3px 5px}
+.codebox{border:2px solid var(--ink);border-radius:6px;background:var(--paper2);padding:14px 16px;margin:0 16px}
+.codebox__code{font:700 32px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.3em;text-align:center}
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:2px solid var(--hair)}
+.kv dt{font:700 10px/1.3 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
+.kv dd{margin:0;font:600 14px/1.3 inherit}
+
+/* ---------- switch ---------- */
+.switch{width:52px;height:31px;border:2px solid var(--ink);border-radius:16px;background:var(--paper2);position:relative;cursor:pointer;padding:0;flex:0 0 52px}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:23px;height:23px;border-radius:50%;background:var(--ink);transition:transform .18s cubic-bezier(.3,.9,.3,1)}
+.switch[aria-checked="true"]{background:var(--approve)}
+.switch[aria-checked="true"]::after{transform:translateX(21px);background:var(--paper)}
+
+/* ---------- camera ---------- */
+.cam{position:absolute;inset:0;background:#000;display:flex;flex-direction:column;color:#fff;z-index:40}
+.cam__top{padding:60px 14px 10px;display:flex;align-items:center;justify-content:space-between}
+.cam__label{font:700 11px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.16em}
+.cam__btn{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.16);border:0;color:#fff;display:grid;place-items:center;cursor:pointer}
+.cam__modes{display:flex;justify-content:center;gap:6px;padding:0 0 10px}
+.cam__modes button{font:700 11px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.12em;border:0;background:none;color:rgba(255,255,255,.55);padding:6px 12px;cursor:pointer;text-transform:uppercase}
+.cam__modes button[aria-pressed="true"]{color:#fff}
+.cam__view{flex:1;margin:0 12px;position:relative;border-radius:10px;overflow:hidden;background:#111;min-height:0}
+.cam__view img{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.92)}
+.cam__grid{position:absolute;inset:0;background:
+  linear-gradient(90deg,transparent 33.2%,rgba(255,255,255,.28) 33.2%,rgba(255,255,255,.28) 33.6%,transparent 33.6%,transparent 66.3%,rgba(255,255,255,.28) 66.3%,rgba(255,255,255,.28) 66.7%,transparent 66.7%),
+  linear-gradient(0deg,transparent 33.2%,rgba(255,255,255,.28) 33.2%,rgba(255,255,255,.28) 33.6%,transparent 33.6%,transparent 66.3%,rgba(255,255,255,.28) 66.3%,rgba(255,255,255,.28) 66.7%,transparent 66.7%)}
+.cam__rec{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;font:700 11px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.1em}
+.cam__dot{width:9px;height:9px;border-radius:50%;background:#F04438}
+.cam__mode{position:absolute;top:10px;right:10px;font:700 11px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.1em;border:1.5px solid rgba(255,255,255,.6);border-radius:4px;padding:4px 6px}
+.cam__bottom{padding:18px 0 12px;display:flex;align-items:center;justify-content:center;position:relative;flex:0 0 auto}
+.shutter{width:74px;height:74px;border-radius:50%;border:4px solid #fff;background:none;cursor:pointer;position:relative;padding:0}
+.shutter::after{content:"";position:absolute;inset:6px;border-radius:50%;background:#fff;transition:transform .12s ease}
+.shutter:active::after{transform:scale(.88)}
+.shutter--rec::after{background:#F04438;border-radius:6px;inset:22px}
+.ring{position:absolute;width:92px;height:92px;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:3}
+.ring .bg{stroke:rgba(255,255,255,.28)} .ring .fg{stroke:#fff;stroke-linecap:butt;transition:stroke-dashoffset .2s linear}
+.cam__sim{margin:0 12px 22px;padding:9px 11px;border:1.5px dashed rgba(255,255,255,.4);border-radius:8px;font:500 11px/1.4 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.02em;color:rgba(255,255,255,.8);flex:0 0 auto}
+.cam__sim button{font:700 11px/1 inherit;background:#fff;color:#0E0E0E;border:0;border-radius:4px;padding:6px 8px;cursor:pointer;margin-left:6px;text-transform:uppercase;letter-spacing:.06em}
+@keyframes flashout{0%{opacity:.92}100%{opacity:0}}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:50}
+.flash--go{animation:flashout .45s ease-out forwards}
+
+/* ---------- upload ---------- */
+.upwrap{padding:26px 16px 0}
+.uphead{padding:60px 22px 0;flex:0 0 auto}
+.upshot{position:relative;width:100%;height:168px;border:2px solid var(--ink);border-radius:6px;overflow:hidden;background:var(--paper2)}
+.upshot img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.35) contrast(1.05)}
+.upshot__tag{position:absolute;left:10px;bottom:10px;font:700 10px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.14em;background:var(--ink);color:var(--paper);padding:5px 7px}
+.bar{height:22px;border:2px solid var(--ink);border-radius:4px;overflow:hidden;background:var(--paper2);margin-top:14px}
+.bar__fill{height:100%;background:var(--ink);width:0%;transition:width .18s linear}
+.bar--brand .bar__fill{background:var(--brand)}
+
+/* ---------- sheets, toasts, alerts ---------- */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.42);z-index:80;animation:fadein .18s ease both}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:85;background:var(--paper);border-top:2px solid var(--ink);border-radius:14px 14px 0 0;padding:18px 16px 26px;animation:up .26s cubic-bezier(.2,.9,.3,1) both}
+@keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sheet__title{font-family:Anton,sans-serif;font-size:27px;line-height:.98;letter-spacing:-.01em;text-transform:uppercase;margin:0}
+.sheet__list{list-style:none;margin:14px 0 0;padding:0}
+.sheet__list li{display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-bottom:2px solid var(--hair);font-size:14px;line-height:1.35}
+.sheet__list .ico{flex:0 0 20px;margin-top:1px}
+.toast{
+  position:absolute;left:14px;right:14px;bottom:14px;z-index:90;background:var(--ink);color:var(--paper);
+  border:2px solid var(--ink);border-radius:8px;padding:11px 13px;display:flex;align-items:center;gap:12px;
+  animation:up .22s cubic-bezier(.2,.9,.3,1) both;box-shadow:4px 4px 0 rgba(0,0,0,.35);
+}
+.toast--above-tabs{bottom:88px}
+.toast__t{flex:1;font:600 13px/1.25 inherit}
+.toast__b{font:700 12px/1 inherit;letter-spacing:.06em;background:var(--paper);color:var(--ink);border:2px solid var(--paper);border-radius:4px;padding:8px 10px;cursor:pointer;text-transform:uppercase}
+.alert{position:absolute;left:34px;right:34px;top:50%;transform:translateY(-50%);z-index:90;background:var(--paper);border:2px solid var(--ink);border-radius:10px;padding:18px 16px 14px;animation:slamin .22s cubic-bezier(.2,.9,.3,1) both;box-shadow:4px 4px 0 var(--ink)}
+@keyframes slamin{from{transform:translateY(-50%) scale(.9);opacity:0}to{transform:translateY(-50%) scale(1);opacity:1}}
+.alert__t{font-family:Anton,sans-serif;font-size:20px;line-height:1.05;text-transform:uppercase;margin:0}
+.alert__m{font-size:13px;line-height:1.4;color:var(--muted);margin:8px 0 14px}
+.alert__acts{display:flex;gap:8px}
+.alert__acts .btn{flex:1;min-height:44px;font-size:12px}
+
+/* ---------- states ---------- */
+.state{padding:40px 26px;text-align:left}
+.state__big{font-family:Anton,sans-serif;font-size:36px;line-height:.94;letter-spacing:-.01em;text-transform:uppercase;margin:0 0 10px}
+.state__p{font-size:15px;line-height:1.45;margin:0 0 18px;max-width:30ch}
+.state__art{width:104px;height:104px;border:2px solid var(--ink);border-radius:6px;background:var(--paper2);display:grid;place-items:center;margin-bottom:22px;transform:rotate(-4deg);box-shadow:4px 4px 0 var(--ink)}
+.state__art svg{width:52px;height:52px;opacity:.55;fill:currentColor}
+.banner{display:flex;gap:9px;align-items:center;margin:12px 16px 0;border:2px solid var(--ink);border-radius:6px;padding:10px 12px;background:var(--paper2)}
+.banner b{font:700 11px/1.3 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase}
+.banner p{margin:3px 0 0;font-size:12.5px;line-height:1.35;color:var(--muted)}
+
+/* ---------- tab bar ---------- */
+.tabbar[hidden]{display:none}
+.tabbar{
+  position:absolute;left:0;right:0;bottom:0;z-index:40;display:flex;padding:7px 4px 0;
+  background:color-mix(in srgb,var(--paper) 84%,transparent);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);
+  border-top:2px solid var(--ink);
+}
+.tab{flex:1;background:none;border:0;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0 14px;cursor:pointer;font:700 10px/1 inherit;letter-spacing:.06em;text-transform:uppercase}
+.tab .ico{width:25px;height:25px}
+.tab__ico{position:relative;display:block;width:25px;height:25px}
+.tab__ico .ico{width:25px;height:25px}
+.tab[aria-selected="true"]{color:var(--ink)}
+.tab__badge{position:absolute;top:-7px;right:-13px;background:var(--ink);color:var(--paper);border:2px solid var(--ink);border-radius:9px;min-width:19px;height:19px;display:grid;place-items:center;font:700 10px/1 ui-monospace,monospace;padding:0 4px}
+
+/* ---------- misc ---------- */
+#overlay{position:absolute;inset:0;z-index:80;pointer-events:none}
+#overlay>*{pointer-events:auto}
+.imgbroken{opacity:0}
+.ph{background:repeating-linear-gradient(135deg,var(--paper2) 0 8px,color-mix(in srgb,var(--paper2) 60%,var(--ink)) 8px 16px)}
+.center{display:flex;align-items:center;justify-content:center}
+.spacer14{height:14px} .spacer22{height:22px} .spacer30{height:30px}
+.emoji-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;padding:12px 16px 0}
+.emoji-grid button{aspect-ratio:1;border:2px solid var(--hair);border-radius:6px;background:var(--paper);font-size:21px;cursor:pointer;display:grid;place-items:center;padding:0}
+.emoji-grid button[aria-pressed="true"]{border-color:var(--ink);border-width:3px;background:var(--ink)}
+.emoji-grid button:active{transform:scale(.92)}
+.picker-note{font:500 11px/1.4 ui-monospace,monospace;color:var(--muted);padding:12px 16px 0;letter-spacing:.03em}
+.onb{height:100%;display:flex;flex-direction:column}
+.onb__media{position:relative;height:392px;overflow:hidden;background:var(--paper2);flex:0 0 auto}
+.onb__media img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.18) contrast(1.06)}
+.onb__media::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,0) 34%,rgba(0,0,0,.34) 100%)}
+.onb__stamp{position:absolute;left:22px;bottom:22px;z-index:2}
+.onb__body{padding:22px 22px 0;flex:1;display:flex;flex-direction:column}
+.onb__t{font-family:Anton,sans-serif;font-size:34px;line-height:.94;letter-spacing:-.015em;text-transform:uppercase;margin:0}
+.onb__p{font-size:15px;line-height:1.45;margin:12px 0 0;max-width:32ch}
+.onb__facts{margin-top:auto;padding-bottom:18px;display:flex;flex-direction:column;gap:0;border-top:2px solid var(--ink)}
+.onb__fact{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:2px solid var(--hair)}
+.onb__fact b{font:700 10px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.onb__fact span{font:700 13px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.03em;text-transform:uppercase;text-align:right}
+.onb__dots{display:flex;gap:7px;padding:0 22px;margin-top:20px}
+.onb__dots i{width:26px;height:5px;background:var(--hair);display:block}
+.onb__dots i.on{background:var(--ink)}
+.onb__acts{display:flex;gap:10px;padding:18px 22px 30px;align-items:center}
+.onb__acts .btn{flex:1}
+.linkbtn{background:none;border:0;color:var(--ink);font:700 13px/1 inherit;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;padding:10px;text-decoration:underline;text-underline-offset:3px}
+.apple{
+  width:100%;min-height:52px;border-radius:8px;background:#000;color:#fff;border:0;display:flex;align-items:center;justify-content:center;gap:9px;
+  font:600 17px/1 inherit;cursor:pointer;letter-spacing:.01em;
+}
+.apple:active{opacity:.82}
+.apple svg{width:19px;height:22px;fill:currentColor}
+.legal{font:500 11px/1.45 inherit;color:var(--muted);text-align:center;padding:0 24px}
+.centered-block{padding:0 22px}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="device-col">
+    <div class="device">
+      <div class="screen" id="screen">
+        <div class="island"></div>
+        <div class="statusbar" id="statusbar">
+          <span id="clock">9:41</span>
+          <span class="statusbar__r" aria-hidden="true">
+            <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor"><path d="M8 10.4 5.9 8.3a3 3 0 0 1 4.2 0L8 10.4Zm0-4.9a5.6 5.6 0 0 0-4 1.7L2.5 5.7a7.7 7.7 0 0 1 11 0L12 7.2a5.6 5.6 0 0 0-4-1.7Zm0-4.2c3 0 5.8 1.2 7.8 3.2L17.2 6A9.9 9.9 0 0 0 8 1.3 9.9 9.9 0 0 0-1.2 6l1.4 1.5A12 12 0 0 1 8 1.3Z" transform="translate(0,1)"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.6" y="0.6" width="20" height="10.8" rx="3" stroke="currentColor" stroke-opacity=".4"/><rect x="2.2" y="2.2" width="14" height="7.6" rx="1.6" fill="currentColor"/><path d="M22.4 4.2v3.6a2 2 0 0 0 0-3.6Z" fill="currentColor" fill-opacity=".4"/></svg>
+          </span>
+        </div>
+        <div class="app" id="app"></div>
+        <div id="overlay"></div>
+        <nav class="tabbar" id="tabbar" hidden></nav>
+        <div class="home"></div>
+      </div>
+    </div>
+    <div class="device__foot"><b id="footState">DEMO</b><span id="footScreen">—</span></div>
+  </div>
+
+  <aside class="panel">
+    <h1 id="panelBrand">Receipts</h1>
+    <p class="tagline">Pics or it didn't happen.<br>Clickable prototype — tap the phone.</p>
+
+    <div class="panel__sec">
+      <h2>Appearance</h2>
+      <div class="panel__row">
+        <button class="chipbtn" id="themeBtn" aria-pressed="false">Dark mode</button>
+        <button class="chipbtn" id="resetBtn">Reset demo</button>
+      </div>
+    </div>
+
+    <div class="panel__sec">
+      <h2>State toggles</h2>
+      <div class="panel__row">
+        <button class="chipbtn" id="hazardBtn" aria-pressed="false">Deadline: last 24h</button>
+        <button class="chipbtn" id="feedLockBtn" aria-pressed="false">Feed locked</button>
+      </div>
+      <p class="panel__note">Last-24h turns on the hazard-tape banner. Feed locked hides others' proofs until you post.</p>
+    </div>
+
+    <div class="panel__sec">
+      <h2>Jump to screen</h2>
+      <div class="jump" id="jump"></div>
+    </div>
+
+    <div class="panel__sec">
+      <h2>Notes</h2>
+      <p class="panel__note">Swipe the vote card with the mouse or your finger. Every screen is live: data reacts to what you do.</p>
+    </div>
+  </aside>
+</div>
+<script>
+'use strict';
+/* ============================================================================
+   RECEIPTS — clickable prototype. In-memory fake API, no backend.
+   ========================================================================== */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* The one place the product name lives. Swap it here and the whole prototype follows. */
+const APP_NAME = 'Receipts';
+
+/* Photos are bundled locally so the prototype renders the same offline, every time. */
+const PIC_POOL = [
+  'sunrise','recipe','handstand','texty','detour','hilltop','mumdaal','mywall','badelong',
+  'balcony','kitchen','stairs','laundry','street','berlinbalcony','driving','gymset',
+  'proofstack','kitchenproof','votehand','camview','camvideo'
+];
+const PIC = (seed) => {
+  const s = String(seed);
+  if (PIC_POOL.indexOf(s) !== -1) return 'img/' + s + '.jpg';
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return 'img/' + PIC_POOL[h % PIC_POOL.length] + '.jpg';
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ---------- icons (drawn, one consistent weight) ---------- */
+const IC = {
+  chevL: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M14.7 4.3a1.4 1.4 0 0 1 0 2L9 12l5.7 5.7a1.4 1.4 0 1 1-2 2l-6.7-6.7a1.4 1.4 0 0 1 0-2L12.7 4.3a1.4 1.4 0 0 1 2 0Z"/></svg>`,
+  chevR: `<svg class="ico ico--sm" viewBox="0 0 24 24" fill="currentColor"><path d="M9.3 4.3a1.4 1.4 0 0 1 2 0l6.7 6.7a1.4 1.4 0 0 1 0 2l-6.7 6.7a1.4 1.4 0 0 1-2-2L15 12 9.3 6.3a1.4 1.4 0 0 1 0-2Z"/></svg>`,
+  person: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11.6a4.3 4.3 0 1 0 0-8.6 4.3 4.3 0 0 0 0 8.6Zm0 1.9c-3.7 0-6.7 1.9-6.7 4.3v1.3h13.4v-1.3c0-2.4-3-4.3-6.7-4.3Z"/></svg>`,
+  gear: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M10.6 1.2h2.8l.45 2.3c.6.17 1.15.43 1.65.75l2.1-1.05 1.97 1.97-1.05 2.1c.32.5.58 1.05.75 1.65l2.3.45v2.8l-2.3.45c-.17.6-.43 1.15-.75 1.65l1.05 2.1-1.97 1.97-2.1-1.05c-.5.32-1.05.58-1.65.75l-.45 2.3h-2.8l-.45-2.3a7.6 7.6 0 0 1-1.65-.75l-2.1 1.05-1.97-1.97 1.05-2.1a7.6 7.6 0 0 1-.75-1.65l-2.3-.45v-2.8l2.3-.45c.17-.6.43-1.15.75-1.65L4.68 5.05 6.65 3.08l2.1 1.05c.5-.32 1.05-.58 1.65-.75l.45-2.3Z"/><path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"/></svg>`,
+  listNum: `<svg class="ico" viewBox="0 0 24 26" fill="currentColor"><text x="0" y="8.4" font-family="Anton, sans-serif" font-size="9.5">1</text><rect x="9.6" y="4.6" width="14.4" height="2.6" rx="1.3"/><text x="0" y="16.1" font-family="Anton, sans-serif" font-size="9.5">2</text><rect x="9.6" y="12.3" width="14.4" height="2.6" rx="1.3"/><text x="0" y="23.8" font-family="Anton, sans-serif" font-size="9.5">3</text><rect x="9.6" y="20" width="14.4" height="2.6" rx="1.3"/></svg>`,
+  thumb: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21h3V9H2v12Zm21-11c0-1.1-.9-2-2-2h-6.3l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2Z"/></svg>`,
+  photoStack: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M8.6 1.6h11.9A2.5 2.5 0 0 1 23 4.1v11.9a2.5 2.5 0 0 1-2.5 2.5H8.6A2.5 2.5 0 0 1 6.1 16V4.1a2.5 2.5 0 0 1 2.5-2.5Z" opacity=".42"/><path d="M2.5 6h13A2.5 2.5 0 0 1 18 8.5v12a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 0 20.5v-12A2.5 2.5 0 0 1 2.5 6Z"/></svg>`,
+  trophy: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M6 2.5h12a1 1 0 0 1 1 1v1.5h2.5a1 1 0 0 1 1 1v1.7a5.6 5.6 0 0 1-4.7 5.5A6.3 6.3 0 0 1 13 15.8V19h3.5a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1H11v-3.2a6.3 6.3 0 0 1-4.8-2.6A5.6 5.6 0 0 1 1.5 7.7V6a1 1 0 0 1 1-1H5V3.5a1 1 0 0 1 1-1Zm0 3v3.7a3.6 3.6 0 0 0 2 3.2V5.5H6Zm12 0h-3v6.9a3.6 3.6 0 0 0 2-3.2V5.5Z"/></svg>`,
+  check: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 5.7a1.6 1.6 0 0 1 0 2.3l-10 10a1.6 1.6 0 0 1-2.3 0l-5-5a1.6 1.6 0 1 1 2.3-2.3l3.9 3.8 8.8-8.8a1.6 1.6 0 0 1 2.3 0Z"/></svg>`,
+  cross: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.7a1.6 1.6 0 0 1 0 2.3L13 13.3l5.3 5.3a1.6 1.6 0 1 1-2.3 2.3L10.7 15.6 5.4 20.9a1.6 1.6 0 0 1-2.3-2.3l5.3-5.3L3.1 8a1.6 1.6 0 0 1 2.3-2.3l5.3 5.3 5.3-5.3a1.6 1.6 0 0 1 2.3 0Z"/></svg>`,
+  cam: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6.5h3.2l1.3-2h7l1.3 2H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Zm8 3.2a4.1 4.1 0 1 0 0 8.2 4.1 4.1 0 0 0 0-8.2Zm0 1.9a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4Z"/></svg>`,
+  video: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.5h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Zm13.4 3.5 4.4-3a1 1 0 0 1 1.6.8v7.4a1 1 0 0 1-1.6.8l-4.4-3V10Z"/></svg>`,
+  flash: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M13.6 1.5 4.9 13.2c-.4.5 0 1.3.7 1.3h4.6l-1 7.4c-.1.8 1 1.3 1.5.7l8.4-10.4c.5-.6.1-1.4-.7-1.4h-4.4l1.2-8.6c.2-.8-1-1.3-1.6-.7Z"/></svg>`,
+  copy: `<svg class="ico ico--sm" viewBox="0 0 24 24" fill="currentColor"><path d="M9 2h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3Zm-1 3v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H8Z"/><path d="M3 7v11a3 3 0 0 0 3 3h9v-2H6a1 1 0 0 1-1-1V7H3Z"/></svg>`,
+  share: `<svg class="ico ico--sm" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.4a1 1 0 0 1 .7.3l4.9 4.9a1 1 0 0 1-1.4 1.4L13 6.6V16a1 1 0 1 1-2 0V6.6L7.8 9a1 1 0 0 1-1.4-1.4l4.9-4.9a1 1 0 0 1 .7-.3Z"/><path d="M4 12a1 1 0 0 1 1 1v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6a1 1 0 1 1 2 0v6a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-6a1 1 0 0 1 1-1Z"/></svg>`,
+  bell: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a6 6 0 0 0-6 6v3.7L4.3 15a1 1 0 0 0 .9 1.5h13.6a1 1 0 0 0 .9-1.5L18 11.7V8a6 6 0 0 0-6-6Zm0 19.9a3.1 3.1 0 0 0 2.8-2H9.2a3.1 3.1 0 0 0 2.8 2Z"/></svg>`,
+  clock: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.4a7.6 7.6 0 1 1 0 15.2 7.6 7.6 0 0 1 0-15.2Zm-.9 2.1h1.8v5.2l3.4 2-.8 1.4-4.4-2.5V6.5Z"/></svg>`,
+  flame: `<svg class="ico ico--sm" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5c.4 3.4-1.1 5.3-2.6 7.1-1.3 1.5-2.5 3.1-2.5 5.4 0 3.4 2.4 6 5.4 6s5.4-2.6 5.4-6c0-1.7-.6-3.2-1.5-4.6.7.4 1.2 1 1.6 1.7.9-3.4-1.2-7-5.8-9.6Z"/><path d="M11.3 22.3c-3 0-5.4-2.4-5.4-5.4 0-1.6.5-2.8 1.4-3.9-.2 3 1.6 4.7 3.7 5.1 1.5.3 2.4-.4 2.8-1.3.4 1.8-1 3.4-2.7 4 1 .3 2.1.4 3.3.4 2.9 0 5.3-2.4 5.3-5.4 0-.6-.1-1.1-.2-1.6.1 1.8-.8 2.9-2.1 3.4.4-2.2-.7-4.1-1.9-5.4-.8 3.7-2.8 5.8-2.8 8.9 0 2.9 2.4 5.2 5.6 5.2Z"/></svg>`,
+  trash: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2ZM6 8h12l-1 12.1a2 2 0 0 1-2 1.9H9a2 2 0 0 1-2-1.9L6 8Z"/></svg>`,
+  exit: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3Zm6.7 4.3-1.4 1.4 2.3 2.3H9v2h8.6l-2.3 2.3 1.4 1.4 4.7-4.7-4.7-4.7Z"/></svg>`,
+  offline: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 18.2a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8Zm0-6.1c-1.4 0-2.7.5-3.7 1.4l1.5 1.5a3.3 3.3 0 0 1 4.4 0l1.5-1.5a5.3 5.3 0 0 0-3.7-1.4Zm0-5.1c-2.6 0-5 1-6.8 2.6l1.5 1.5a7.6 7.6 0 0 1 10.6 0l1.5-1.5A10.4 10.4 0 0 0 12 7Z"/><path d="M1.3 1.3 22.7 22.7l-1.4 1.4L-.1 2.7 1.3 1.3Z"/></svg>`,
+  warn: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5 22.5 20.5H1.5L12 2.5Zm0 5.4a1.2 1.2 0 0 0-1.2 1.3l.4 5.2a.8.8 0 0 0 1.6 0l.4-5.2A1.2 1.2 0 0 0 12 7.9Zm0 8.6a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Z"/></svg>`,
+  inbox: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm1 2v12h16V6H4Zm3 8h10v2H7v-2Z"/></svg>`,
+  lock: `<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a5 5 0 0 1 5 5v2h1.5A1.5 1.5 0 0 1 20 10.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5v-9A1.5 1.5 0 0 1 5.5 9H7V7a5 5 0 0 1 5-5Zm3 7H9V7a3 3 0 1 1 6 0v2Z"/></svg>`,
+  apple: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.7c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.8-2-1.6-.2-3.1.9-3.9.9s-2-.9-3.3-.9c-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.5 1.3-.1 1.8-.8 3.3-.8s1.9.8 3.3.8c1.4 0 2.2-1.3 3.1-2.5 1-1.5 1.4-2.9 1.4-3 0 0-2.6-1-2.6-3.8ZM14 5.1c.6-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.5Z"/></svg>`,
+};
+
+/* ============================================================================
+   DATA
+   ========================================================================== */
+const EMOJI_PICK = ['🦊','🐻','🥷','🍕','🎸','🌵','🦆','🐶','🐱','🦁','🐼','🐸','🦄','🐙','🦋','🌻','🍀','🔥','🌙','⭐','🍩','🥑','🛹','📻','🪴','🧃'];
+const ME = 'u0';
+
+const SEED = () => ({
+  members: {
+    u0: { id:'u0', name:'Mathys', emoji:'🦊' },
+    u1: { id:'u1', name:'Sam',    emoji:'🐻' },
+    u2: { id:'u2', name:'Robin',  emoji:'🥷' },
+    u3: { id:'u3', name:'Nadia',  emoji:'🍕' },
+    u4: { id:'u4', name:'Theo',   emoji:'🎸' },
+    u5: { id:'u5', name:'Priya',  emoji:'🌵' },
+    u6: { id:'u6', name:'Ada',    emoji:'🦆' }
+  },
+  groups: [
+    { id:'g1', name:'The Backyard',    code:'K4M2XP', perWeek:5, theme:'low-key chaos, nothing humiliating', members:['u0','u1','u2','u3','u4','u5'], owner:'u0', streak:4, icon:'🦊',
+      myStatus:{ c1:'todo', c2:'pending', c3:'todo', c4:'accepted', c5:'rejected' } },
+    { id:'g2', name:'Uni Remainders',  code:'7QW3ND', perWeek:3, theme:'',                        members:['u0','u1','u3','u6'],             owner:'u1', streak:2, icon:'🎓',
+      myStatus:{ k1:'todo', k2:'todo', k3:'todo' } },
+    { id:'g3', name:'Solo Gym Bro',    code:'3KM9TB', perWeek:5, theme:'',                        members:['u0'],                          owner:'u0', streak:0, icon:'🏋️',
+      myStatus:{ o1:'pending', o2:'todo', o3:'todo', o4:'todo', o5:'todo' } }
+  ],
+  challenges: {
+    g1: [
+      { id:'c1', title:'Sunrise on the hill',   desc:"Top of the hill before 7am. Cloudy still counts, you've seen worse mornings.", diff:'easy',   points:10 },
+      { id:'c2', title:"Cook your mum's recipe", desc:"One real recipe from home. The one she'd actually cook, not the fancy one.",        diff:'medium', points:25 },
+      { id:'c3', title:"Text a mate you've ghosted", desc:'The longer it\'s been, the braver. Screenshot the reply.',                      diff:'easy',   points:10 },
+      { id:'c4', title:'Handstand. A wall counts.', desc:'Ten seconds. Film it, do not hide it.',                                          diff:'hard',   points:50 },
+      { id:'c5', title:'Take the long way home', desc:'Any route at least twice as long. Prove it with a map screenshot.',                 diff:'easy',   points:10 }
+    ],
+    g2: [
+      { id:'k1', title:'Balcony sunrise',    desc:'Any balcony, any city, one sunrise.',       diff:'easy',   points:10 },
+      { id:'k2', title:'Three songs, no skips', desc:'Playlist a friend, let them drive.',       diff:'medium', points:25 },
+      { id:'k3', title:'Skip the last train', desc:'Plan a night that runs long.',              diff:'hard',   points:50 }
+    ],
+    g3: [
+      { id:'o1', title:'Gym, filmed',   desc:'One set, one rep, one video.', diff:'easy',   points:10 },
+      { id:'o2', title:'Cold shower',   desc:'Ten seconds longer than usual.', diff:'medium', points:25 },
+      { id:'o3', title:'Meal prep',     desc:'Cook for tomorrow, film the fridge.', diff:'easy', points:10 },
+      { id:'o4', title:'Run 2k',        desc:'Any pace, no walking.',        diff:'medium', points:25 },
+      { id:'o5', title:'Stretch, filmed', desc:'Ten minutes, camera on.',       diff:'easy',   points:10 }
+    ]
+  },
+  submissions: [
+    /* current week — pending proofs from other members */
+    { id:'s1', g:'g1', cid:'c1', user:'u1', seed:'sunrise',  cap:'5:41am. zero regrets.',      type:'photo', status:'pending', ap:1, re:0, mv:null, elig:5, ago:'2h',  week:'cur' },
+    { id:'s2', g:'g1', cid:'c2', user:'u2', seed:'recipe',   cap:"mum's dal. edible.",          type:'photo', status:'pending', ap:0, re:2, mv:null, elig:5, ago:'4h',  week:'cur' },
+    { id:'s3', g:'g1', cid:'c4', user:'u3', seed:'handstand',cap:'the wall did most of it',     type:'video', status:'pending', ap:1, re:0, mv:null, elig:5, ago:'6h',  week:'cur' },
+    { id:'s4', g:'g1', cid:'c3', user:'u4', seed:'texty',    cap:'7 months. she replied in 4 mins.', type:'photo', status:'pending', ap:0, re:0, mv:null, elig:5, ago:'9h',  week:'cur' },
+    { id:'s5', g:'g1', cid:'c5', user:'u5', seed:'detour',   cap:'51 minutes instead of 12',    type:'photo', status:'pending', ap:1, re:1, mv:null, elig:5, ago:'11h', week:'cur' },
+    { id:'s6', g:'g1', cid:'c1', user:'u3', seed:'hilltop',  cap:'cloudy but the glow was real', type:'photo', status:'pending', ap:0, re:1, mv:null, elig:5, ago:'13h', week:'cur' },
+    /* my own proofs this week */
+    { id:'s7', g:'g1', cid:'c2', user:'u0', seed:'mumdaal',  cap:"made it twice. it's edible.", type:'photo', status:'pending', ap:0, re:0, mv:null, elig:5, ago:'1d',  week:'cur' },
+    { id:'s8', g:'g1', cid:'c4', user:'u0', seed:'mywall',   cap:'ten seconds against a wall', type:'photo', status:'accepted', ap:3, re:0, mv:null, elig:5, ago:'2d', week:'cur' },
+    { id:'s9', g:'g1', cid:'c5', user:'u0', seed:'badelong', cap:'took the scenic route. lost 40 min', type:'photo', status:'rejected', ap:0, re:3, mv:null, elig:5, ago:'2d', week:'cur' },
+    /* older weeks, feed history */
+    { id:'f1', g:'g1', cid:'c1', user:'u1', seed:'balcony',  cap:'2am balcony, no regrets',   type:'photo', status:'accepted', ap:3, re:0, mv:null, elig:5, ago:'4d',  week:'past' },
+    { id:'f2', g:'g1', cid:'c2', user:'u3', seed:'kitchen',  cap:'broke a plate. worth it',   type:'photo', status:'accepted', ap:2, re:0, mv:null, elig:5, ago:'5d',  week:'past' },
+    { id:'f3', g:'g1', cid:'c3', user:'u4', seed:'stairs',   cap:'that was a bad idea',       type:'photo', status:'rejected', ap:0, re:3, mv:null, elig:5, ago:'5d',  week:'past' },
+    { id:'f4', g:'g1', cid:'c4', user:'u5', seed:'laundry',  cap:'folded everything. even the socks', type:'photo', status:'accepted', ap:2, re:0, mv:null, elig:5, ago:'6d', week:'past' },
+    { id:'f5', g:'g1', cid:'c5', user:'u2', seed:'street',   cap:'walked the long way home', type:'photo', status:'accepted', ap:3, re:0, mv:null, elig:5, ago:'7d',  week:'past' },
+    /* other groups */
+    { id:'g2s1', g:'g2', cid:'k1', user:'u1', seed:'berlinbalcony', cap:'sunrise over the Spree', type:'photo', status:'pending', ap:1, re:0, mv:null, elig:3, ago:'3h', week:'cur' },
+    { id:'g2s2', g:'g2', cid:'k2', user:'u3', seed:'driving',  cap:'three songs, no skips',     type:'video', status:'pending', ap:0, re:1, mv:null, elig:3, ago:'6h', week:'cur' },
+    { id:'g3s1', g:'g3', cid:'o1', user:'u0', seed:'gymset',   cap:'one set, one video',        type:'photo', status:'pending', ap:0, re:0, mv:null, elig:0, ago:'1h', week:'cur' }
+  ],
+  board: {
+    g1: {
+      week: { u1:120, u4:95, u3:70, u0:45, u2:30, u5:15 },
+      all:  { u0:1240, u1:1510, u2:980, u3:1120, u4:870, u5:640 },
+      move: { u1:2, u4:1, u3:0, u0:-2, u2:-1, u5:0 },
+      streak:{ u1:7, u4:3, u3:2, u0:0, u2:1, u5:0 }
+    },
+    g2: {
+      week: { u1:85, u3:40, u6:25, u0:10 },
+      all:  { u1:2200, u3:1980, u6:1420, u0:860 },
+      move: { u1:1, u3:-1, u6:0, u0:1 },
+      streak:{ u1:12, u3:2, u6:0, u0:0 }
+    },
+    g3: {
+      week: { u0:25 }, all: { u0:430 }, move: { u0:0 }, streak: { u0:0 }
+    }
+  },
+  /* my last six weeks — one missed week shows as a cracked block */
+  myBlocks: [1,1,1,0,1,1],
+  myRecap: {
+    week:'WEEK 45',
+    dates:'NOV 2 — NOV 8',
+    lines:[
+      ['HANDSTAND. A WALL COUNTS.', '50'],
+      ['FIRST TO FINISH BONUS', '10'],
+      ['STREAK BONUS — 4 WEEKS', '20']
+    ],
+    pending:["COOK YOUR MUM'S RECIPE"],
+    total:'80'
+  }
+});
+
+/* ============================================================================
+   STATE
+   ========================================================================== */
+let S = null;
+function freshState() {
+  const d = SEED();
+  return {
+    data: d,
+    screen: 'onboarding',
+    prev: [],
+    params: {},
+    theme: 'light',
+    onboard: 0,
+    user: { ...d.members.u0 },
+    groupId: 'g1',
+    variant: { week:'normal', vote:'normal', feed:'normal' },
+    deadline24: false,
+    feedLocked: false,
+    posted: true,
+    myStatus: null,
+    challengeId: null,
+    notifAsked: false,
+    notifOn: false,
+    camMode: 'photo',
+    caption: '',
+    captured: { seed:'mumdaal', type:'photo' },
+    upload: { p:0, done:false },
+    feedMode: 'grid',
+    boardScope: 'week',
+    toast: null,
+    toastT: null,
+    undo: null,
+    undoT: null,
+    overlay: null,
+    scrolled: false
+  };
+}
+
+/* ============================================================================
+   HELPERS
+   ========================================================================== */
+const member = (id) => S.data.members[id];
+const group  = (id) => S.data.groups.find(g => g.id === id) || S.data.groups[0];
+const curGroup = () => group(S.groupId);
+const syncMyStatus = () => { S.myStatus = curGroup().myStatus || (curGroup().myStatus = {}); };
+const challenges = () => S.data.challenges[S.groupId] || [];
+const challenge = (id) => challenges().find(c => c.id === id);
+const subsOf = (gid) => S.data.submissions.filter(s => s.g === gid);
+const pendingSubs = () => subsOf(S.groupId).filter(s => s.status === 'pending' && s.user !== ME);
+const myPendingCount = () => pendingSubs().filter(s => s.mv === null || s.mv === undefined).length;
+const approveNeeded = (s) => Math.min(2, s.elig);
+const rejectNeeded  = (s) => Math.ceil(s.elig / 2);
+const pad2 = (n) => String(n).padStart(2, '0');
+const last24 = () => S.deadline24;
+
+function statusChip(st) {
+  if (!st || st === 'todo') return `<span class="chip chip--todo">To do</span>`;
+  return `<span class="chip chip--${st}">${st}</span>`;
+}
+function diffTag(d) {
+  return `<span class="tag tag--${d}">${d}</span>`;
+}
+function stamp(kind, label, extra = '') {
+  return `<span class="stamp stamp--${kind} ${extra}">${label}</span>`;
+}
+function img(seed, cls = '', alt = '') {
+  return `<img class="${cls}" src="${PIC(seed)}" alt="${esc(alt)}" draggable="false">`;
+}
+function flameSvg() { return IC.flame; }
+function flameChip(n) {
+  if (!n) return '';
+  return `<span class="flame">${flameSvg()}${n}</span>`;
+}
+function toast(text, label, handler) {
+  S.toast = { text, label, handler };
+  render();
+  clearTimeout(S.toastT);
+  S.toastT = setTimeout(() => { S.toast = null; render(); }, 4000);
+}
+function closeToast() { clearTimeout(S.toastT); S.toast = null; }
+
+/* ============================================================================
+   ROUTER
+   ========================================================================== */
+const SCREENS = {
+  onboarding:    { view: viewOnboarding, onDark:true },
+  signin:        { view: viewSignin },
+  setupProfile:  { view: viewSetupProfile },
+  groups:        { view: viewGroups },
+  createGroup:   { view: viewCreateGroup },
+  joinGroup:     { view: viewJoinGroup },
+  week:          { view: viewWeek,        tab:'week' },
+  challenge:     { view: viewChallenge,   tab:'week' },
+  camera:        { view: viewCamera,      full:true, onDark:true },
+  preview:       { view: viewPreview,     full:true },
+  upload:        { view: viewUpload,      full:true, mount: mountUpload },
+  vote:          { view: viewVote,        tab:'vote', mount: mountVote },
+  feed:          { view: viewFeed,        tab:'feed' },
+  board:         { view: viewBoard,       tab:'board' },
+  recap:         { view: viewRecap,       tab:'board' },
+  groupSettings: { view: viewGroupSettings, tab:'week' },
+  profile:       { view: viewProfile,     tab:'week' }
+};
+
+function go(screen, params = {}) {
+  S.prev.push({ screen: S.screen, params: S.params });
+  S.screen = screen; S.params = params; S.overlay = null;
+  render();
+}
+function back() {
+  const p = S.prev.pop();
+  if (p) { S.screen = p.screen; S.params = p.params; }
+  else { S.screen = 'groups'; S.params = {}; }
+  S.overlay = null;
+  render();
+}
+function switchTab(tab) {
+  S.screen = tab; S.params = {}; S.overlay = null; S.prev = [];
+  render();
+}
+function render() {
+  const app = $('#app');
+  const sc = SCREENS[S.screen];
+  app.innerHTML = sc.view();
+  app.classList.toggle('has-tabs', !!sc.tab);
+  const tb = $('#tabbar');
+  tb.hidden = !sc.tab;
+  if (sc.tab) tb.innerHTML = tabbarHTML(sc.tab);
+  $('#statusbar').classList.toggle('statusbar--light', !!sc.onDark);
+  renderOverlay();
+  updatePanel();
+  app.scrollTop = (S.scrollMap && S.scrollMap[S.screen]) ? S.scrollMap[S.screen] : 0;
+  if (sc.mount) sc.mount();
+  syncScrollClass();
+}
+function syncScrollClass() {
+  const bar = $('.topbar');
+  if (bar) bar.classList.toggle('is-scrolled', $('#app').scrollTop > 6);
+}
+
+function tabbarHTML(active) {
+  const badge = myPendingCount();
+  const items = [
+    { id:'week',  label:'Week',  icon:IC.listNum },
+    { id:'vote',  label:'Vote',  icon:IC.thumb,  badge },
+    { id:'feed',  label:'Feed',  icon:IC.photoStack },
+    { id:'board', label:'Board', icon:IC.trophy }
+  ];
+  return items.map(i => `
+    <button class="tab" data-act="tab" data-tab="${i.id}" aria-selected="${i.id === active}">
+      <span class="tab__ico">${i.icon}${i.badge ? `<span class="tab__badge">${i.badge}</span>` : ''}</span>
+      <span>${i.label}</span>
+    </button>`).join('');
+}
+
+function topbar(o) {
+  o = o || {};
+  const right = o.right !== undefined ? o.right :
+    `<button class="tb-btn" data-act="go" data-screen="profile" aria-label="Profile">${IC.person}</button>
+     <button class="tb-btn" data-act="go" data-screen="groupSettings" aria-label="Group settings">${IC.gear}</button>`;
+  return `<header class="topbar">
+    <div class="topbar__row">
+      ${o.back ? `<button class="tb-btn" data-act="back" aria-label="Back">${IC.chevL}</button>` : ''}
+      ${o.group === false ? '' : `<button class="tb-group" data-act="groupPicker">${IC.chevR}<span>${esc(curGroup().name.toUpperCase())}</span></button>`}
+      <span class="tb-spacer"></span>
+      <span class="tb-title">${o.title || ''}</span>
+      <span class="tb-demo">DEMO</span>
+      ${right}
+    </div>
+  </header>`;
+}
+
+/* ============================================================================
+   OVERLAYS (sheets, alerts, toasts)
+   ========================================================================== */
+function renderOverlay() {
+  const root = $('#overlay');
+  const o = S.overlay;
+  let html = '';
+  if (o && o.type === 'groupPicker') {
+    html = `<div class="scrim" data-act="closeOverlay"></div>
+      <div class="sheet">
+        <h2 class="sheet__title">SWITCH GROUP</h2>
+        <ul class="sheet__list">
+          ${S.data.groups.map(g => `<li style="padding:0">
+            <button class="grow" style="padding:10px 0;border-bottom:0" data-act="pickGroup" data-id="${g.id}">
+              <span class="gav" style="width:36px;height:36px;font-size:18px">${g.icon || member(g.members[0]).emoji}</span>
+              <span style="min-width:0">
+                <span class="grow__name" style="font-size:17px">${esc(g.name)}</span>
+                <span class="meta">${g.members.length} MEMBER${g.members.length === 1 ? '' : 'S'} · ${g.perWeek} DARES/WK</span>
+              </span>
+              ${g.id === S.groupId ? '<span class="chip chip--pending">OPEN</span>' : IC.chevR}
+            </button></li>`).join('')}
+        </ul>
+        <button class="btn btn--block" style="margin-top:14px" data-act="closeOverlay">Close</button>
+      </div>`;
+  } else if (o && o.type === 'notif') {
+    html = `<div class="scrim"></div>
+      <div class="sheet">
+        <h2 class="sheet__title">NEVER MISS A DARE</h2>
+        <ul class="sheet__list">
+          <li>${IC.bell}<span>New week's dares land Monday morning.</span></li>
+          <li>${IC.thumb}<span>Someone posted proof and needs your vote.</span></li>
+          <li>${IC.trophy}<span>Your proof got accepted — or didn't. You'll know which.</span></li>
+        </ul>
+        <div class="btnrow" style="margin-top:16px;flex-direction:column;gap:10px">
+          <button class="btn btn--primary btn--block" data-act="notifAllow">Turn on notifications</button>
+          <button class="btn btn--block" data-act="notifLater">Not now</button>
+        </div>
+      </div>`;
+  } else if (o && o.type === 'emoji') {
+    html = `<div class="scrim" data-act="closeOverlay"></div>
+      <div class="sheet">
+        <h2 class="sheet__title">PICK A FACE</h2>
+        <div class="emoji-grid" style="padding-left:0;padding-right:0">
+          ${EMOJI_PICK.map(e => `<button data-act="pickEmoji" data-emoji="${e}" aria-pressed="${e === S.user.emoji}"><span class="emo">${e}</span></button>`).join('')}
+        </div>
+        <button class="btn btn--block" style="margin-top:16px" data-act="closeOverlay">Done</button>
+      </div>`;
+  } else if (o && o.type === 'alert') {
+    html = `<div class="scrim"></div>
+      <div class="alert">
+        <h3 class="alert__t">${esc(o.title)}</h3>
+        <p class="alert__m">${esc(o.message)}</p>
+        <div class="alert__acts">
+          <button class="btn" data-act="alertCancel">${esc(o.cancel || 'Cancel')}</button>
+          <button class="btn ${o.danger ? 'btn--danger' : 'btn--primary'}" data-act="alertConfirm">${esc(o.confirm)}</button>
+        </div>
+      </div>`;
+  }
+  if (S.toast) {
+    html += `<div class="toast${SCREENS[S.screen] && SCREENS[S.screen].tab ? ' toast--above-tabs' : ''}">
+      <span class="toast__t">${esc(S.toast.text)}</span>
+      ${S.toast.label ? `<button class="toast__b" data-act="${S.toast.handler}">${esc(S.toast.label)}</button>` : ''}
+    </div>`;
+  }
+  root.innerHTML = html;
+}
+
+/* ============================================================================
+   SCREEN: ONBOARDING
+   ========================================================================== */
+const ONB = [
+  { t:"PICS OR IT DIDN'T HAPPEN.", p:'Weekly dares. Live camera proof. Your friends get to judge.', seed:'proofstack', stamp:'PENDING',
+    facts:[['EVERY WEEK','5 NEW DARES'],['ONE PROOF','PER DARE'],['THE CREW','DECIDES']] },
+  { t:'PROVE IT.', p:'Camera only. No photo library, no receipts from 2019. One live proof per dare.', seed:'kitchenproof', stamp:'',
+    facts:[['LIVE CAMERA','ONLY'],['PHOTO OR','30S VIDEO'],['NO TAKES','AFTER POSTING']] },
+  { t:'THE CREW DECIDES.', p:'Swipe right to approve, left to send it back. Threshold decides, not vibes.', seed:'votehand', stamp:'ACCEPTED',
+    facts:[['2 APPROVALS','ACCEPTS IT'],['SWIPE OR','TAP THE BUTTONS'],['POINTS','FOR THE WINNER']] }
+];
+function viewOnboarding() {
+  const s = ONB[S.onboard];
+  return `<div class="onb">
+    <div class="onb__media">
+      ${img(s.seed)}
+      ${s.stamp ? `<span class="onb__stamp stamp ${s.stamp === 'ACCEPTED' ? 'stamp--ok' : 'stamp--pending'} stamp--slam">${s.stamp}</span>` : ''}
+    </div>
+    <div class="onb__body">
+      <h1 class="onb__t">${s.t}</h1>
+      <p class="onb__p">${s.p}</p>
+      <div class="onb__facts">
+        ${s.facts.map(([k, v]) => `<div class="onb__fact"><b>${k}</b><span>${v}</span></div>`).join('')}
+      </div>
+    </div>
+    <div class="onb__dots">${ONB.map((_, i) => `<i class="${i === S.onboard ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="onb__acts">
+      <button class="btn btn--ghost" data-act="onbSkip">Skip</button>
+      <button class="btn btn--primary" data-act="onbNext">${S.onboard === ONB.length - 1 ? "Let's go" : 'Next'}</button>
+    </div>
+  </div>`;
+}
+
+/* ============================================================================
+   SCREEN: SIGN IN
+   ========================================================================== */
+function viewSignin() {
+  return `<div style="padding:104px 22px 0">
+    <h1 class="h1" style="padding:0;font-size:52px">${esc(APP_NAME.toUpperCase())}</h1>
+    <p class="body" style="padding:0;margin-top:12px;max-width:27ch">Pics or it didn't happen. Weekly dares for the people you'd actually answer.</p>
+    <div class="spacer30"></div>
+    <button class="apple" data-act="appleSignIn">${IC.apple}<span>Sign in with Apple</span></button>
+    <p class="legal" style="margin-top:14px">Sign in with Apple. We never see your email, and we never need it.</p>
+    <div class="spacer30"></div>
+    <div style="text-align:center"><button class="linkbtn" data-act="tryDemo">Try the demo</button></div>
+  </div>`;
+}
+
+/* ============================================================================
+   SCREEN: NAME + EMOJI
+   ========================================================================== */
+function viewSetupProfile() {
+  return `<div style="padding:96px 0 0">
+    <h1 class="h1">WHO'S THERE?</h1>
+    <p class="body" style="max-width:30ch">Name and face. Your crew sees both on every vote.</p>
+    <div class="field">
+      <label class="field__label" for="nameIn">Display name</label>
+      <input class="input" id="nameIn" value="${esc(S.user.name)}" data-bind="name" maxlength="24" placeholder="Mathys" autocomplete="off">
+    </div>
+    <div class="field" style="margin-top:24px"><span class="field__label">Your face</span></div>
+    <div class="emoji-grid">
+      ${EMOJI_PICK.map(e => `<button data-act="pickEmoji" data-emoji="${e}" aria-pressed="${e === S.user.emoji}"><span class="emo">${e}</span></button>`).join('')}
+    </div>
+    <div class="pad" style="margin-top:26px">
+      <button class="btn btn--primary btn--block" data-act="saveProfile">Continue</button>
+    </div>
+  </div>`;
+}
+
+/* ============================================================================
+   SCREEN: GROUPS
+   ========================================================================== */
+function viewGroups() {
+  const gs = S.data.groups;
+  return `<div style="padding:96px 0 0">
+    <h1 class="h1">YOUR GROUPS</h1>
+    <p class="body" style="max-width:30ch">${gs.length === 1 ? 'One group so far.' : gs.length + ' groups so far.'} Pick one, get moving.</p>
+    <div style="margin-top:18px;border-top:2px solid var(--ink)">
+      ${gs.map(g => `<button class="grow" data-act="pickGroup" data-id="${g.id}">
+        <span class="gav">${g.icon || member(g.members[0]).emoji}</span>
+        <span style="min-width:0">
+          <span class="grow__name">${esc(g.name)}</span>
+          <span class="grow__meta">
+            <span class="meta">${g.members.length} MEMBER${g.members.length === 1 ? '' : 'S'}</span>
+            <span class="meta">${g.perWeek} DARES/WK</span>
+            ${g.streak ? flameChip(g.streak) : ''}
+            ${g.owner === ME ? '<span class="badge">OWNER</span>' : ''}
+          </span>
+        </span>
+        ${IC.chevR}
+      </button>`).join('')}
+    </div>
+    <div class="btnrow" style="margin-top:26px;flex-direction:column;gap:10px">
+      <button class="btn btn--primary btn--block" data-act="go" data-screen="createGroup">Create group</button>
+      <button class="btn btn--block" data-act="go" data-screen="joinGroup">Join with code</button>
+    </div>
+  </div>`;
+}
+
+/* ============================================================================
+   SCREEN: CREATE GROUP
+   ========================================================================== */
+function draft() { return S.draft || (S.draft = { name:'', perWeek:5, theme:'', code:'' }); }
+function viewCreateGroup() {
+  const d = draft();
+  return `<div style="padding:0 0 40px">
+    ${topbar({ title:'New group', back:true, group:false, right:'' })}
+    <h1 class="h1">NEW GROUP</h1>
+    <div class="field">
+      <label class="field__label" for="gname">Group name</label>
+      <input class="input" id="gname" value="${esc(d.name)}" data-bind="draftName" maxlength="40" placeholder="The Backyard" autocomplete="off">
+    </div>
+    <div class="field" style="margin-top:22px">
+      <span class="field__label">Challenges per week</span>
+      <div class="stepper">
+        <button data-act="perWeek" data-d="-1" aria-label="Fewer">−</button>
+        <span class="stepper__val">${d.perWeek}</span>
+        <button data-act="perWeek" data-d="1" aria-label="More">+</button>
+      </div>
+      <p class="hint">Between 3 and 10. Five is plenty.</p>
+    </div>
+    <div class="field" style="margin-top:22px">
+      <label class="field__label" for="gtheme">Theme (optional)</label>
+      <input class="input" id="gtheme" value="${esc(d.theme)}" data-bind="draftTheme" maxlength="200" placeholder="low-key chaos, nothing humiliating" autocomplete="off">
+      <p class="hint">Sent to the AI so it can make dares that fit. Up to 200 characters.</p>
+    </div>
+    <div class="pad" style="margin-top:28px">
+      <button class="btn btn--primary btn--block" data-act="createGroup">Create group</button>
+    </div>
+  </div>`;
+}
+
+/* ============================================================================
+   SCREEN: JOIN WITH CODE
+   ========================================================================== */
+function viewJoinGroup() {
+  const d = draft();
+  return `<div style="padding:0 0 40px">
+    ${topbar({ title:'Join group', back:true, group:false, right:'' })}
+    <h1 class="h1">JOIN WITH CODE</h1>
+    <p class="body" style="max-width:30ch">Six characters. Letters and numbers, no weird ones — 2 to 9 only.</p>
+    <div class="field" style="margin-top:24px">
+      <label class="field__label" for="code">Invite code</label>
+      <input class="input input--code" id="code" value="${esc(d.code)}" data-bind="code" maxlength="6" placeholder="K4M2XP" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="pad" style="margin-top:26px">
+      <button class="btn btn--primary btn--block" data-act="joinGroup">Join group</button>
+    </div>
+  </div>`;
+}
+/* ============================================================================
+   SCREEN: WEEK
+   ========================================================================== */
+function stateBlock(big, p, btn, act, icon, tab) {
+  return `<div class="state">
+    <div class="state__art">${icon}</div>
+    <h2 class="state__big">${big}</h2>
+    <p class="state__p">${p}</p>
+    ${btn ? `<button class="btn btn--primary" data-act="${act}"${tab ? ` data-tab="${tab}"` : ''}>${btn}</button>` : ''}
+  </div>`;
+}
+function offlineNote(what) {
+  return `<div class="banner">${IC.offline}<div><b>You're offline</b><p>Showing the last sync. ${what || "We'll refresh when you're back."}</p></div></div>`;
+}
+function viewWeek() {
+  const g = curGroup();
+  const cs = challenges();
+  const v = S.variant.week;
+  const todo = cs.filter(c => (S.myStatus[c.id] || 'todo') === 'todo').length;
+
+  let body = '';
+  if (v === 'empty') {
+    body = stateBlock('NO DARES THIS WEEK', "Suspicious. Your group asked for chaos and got nothing. Pull a new set?", 'REGENERATE', 'regenerate', IC.inbox);
+  } else if (v === 'error') {
+    body = stateBlock("COULDN'T LOAD YOUR WEEK", 'The server had a moment. Your dares are safe.', 'TRY AGAIN', 'retry', IC.warn);
+  } else {
+    const head = `<h1 class="h1">THIS WEEK</h1>
+      <p class="body meta meta--ink" style="padding:8px 16px 0">NOV 2 — NOV 8 · ${cs.length} DARES · ${g.members.length} IN THE GROUP</p>
+      <p class="body meta" style="padding:6px 16px 0">${last24() ? 'CLOSES IN 06H 12M' : 'CLOSES SUN 23:59 · 4D 04H LEFT'}</p>`;
+    const hazard = last24() ? `<div class="hazard">
+        <div class="hazard__tape"></div>
+        <div class="hazard__bar">LAST 24 HOURS</div>
+        <div class="hazard__sub">${todo} DARE${todo === 1 ? '' : 'S'} LEFT · SUNDAY'S COMING</div>
+      </div>` : '';
+    const list = cs.length === 0 ? stateBlock('NOTHING ON THE LIST', 'No dares this week. Enjoy the quiet.', '', '', IC.inbox) : `
+      <div class="clist">
+        ${cs.map((c, i) => {
+          const st = S.myStatus[c.id] || 'todo';
+          return `<button class="crow" data-act="openChallenge" data-id="${c.id}">
+            <span class="crow__n">${pad2(i + 1)}</span>
+            <span style="min-width:0">
+              <span class="crow__title">${esc(c.title)}</span>
+              <span class="crow__meta">${diffTag(c.diff)}<span class="pts">${c.points} PTS</span></span>
+            </span>
+            <span class="crow__right">${statusChip(st)}<span class="crow__due">SUN 23:59</span></span>
+          </button>`;
+        }).join('')}
+      </div>`;
+    const recapLink = `<div class="pad" style="margin-top:20px"><button class="btn btn--block" data-act="go" data-screen="recap">Weekly recap</button></div>`;
+    body = head + (v === 'offline' ? offlineNote('Your dares are still here.') : '') + hazard + list + recapLink;
+  }
+
+  return `${topbar({ title:'This week' })}
+    <div style="padding-bottom:30px">${body}</div>`;
+}
+
+/* ============================================================================
+   SCREEN: CHALLENGE DETAIL
+   ========================================================================== */
+function viewChallenge() {
+  const c = challenge(S.params.id) || challenges()[0];
+  const st = S.myStatus[c.id] || 'todo';
+  const others = S.data.submissions.filter(s => s.cid === c.id && s.user !== ME && s.week === 'cur').length;
+  const mine = S.data.submissions.find(s => s.cid === c.id && s.user === ME && s.week === 'cur');
+
+  let status = '';
+  if (st === 'pending') {
+    status = `<div class="banner">${IC.clock}<div><b>Pending</b><p>Your proof is with the crew. ${mine ? `${mine.ap} approval${mine.ap === 1 ? '' : 's'}, ${mine.re} rejection${mine.re === 1 ? '' : 's'}.` : ''} Send a new one only if it gets rejected.</p></div></div>`;
+  } else if (st === 'accepted') {
+    status = `<div class="pad" style="margin-top:18px">${stamp('ok', 'Accepted', 'stamp--slam')}</div>
+      <p class="body small" style="margin-top:10px">+${c.points} points. First to finish this dare.</p>`;
+  } else if (st === 'rejected') {
+    status = `<div class="pad" style="margin-top:18px">${stamp('no', 'Rejected')}</div>
+      <p class="body small" style="margin-top:10px">Nah, try again. The week is still open — send a new proof.</p>`;
+  }
+
+  const canProve = (st === 'todo' || st === 'rejected');
+  return `${topbar({ title:'Challenge', back:true })}
+    <div style="padding-bottom:34px">
+      <h1 class="h1" style="font-size:34px">${esc(c.title)}</h1>
+      <div class="body" style="padding-top:12px;max-width:34ch">${esc(c.desc)}</div>
+      <div class="pad" style="display:flex;gap:16px;align-items:center;margin-top:16px;flex-wrap:wrap">
+        ${diffTag(c.diff)}<span class="pts">${c.points} PTS</span><span class="meta">SUN 23:59</span>
+      </div>
+      ${others ? `<p class="body small" style="margin-top:10px">${others} friend${others === 1 ? '' : 's'} already tried this one.</p>` : ''}
+      ${status}
+      <div class="pad" style="margin-top:22px">
+        ${canProve
+          ? `<button class="btn btn--primary btn--block" style="min-height:56px;font-size:17px" data-act="proveIt" data-id="${c.id}">${st === 'rejected' ? 'Try again' : 'Prove it.'}</button>`
+          : `<button class="btn btn--block" disabled>${st === 'accepted' ? 'Already done' : 'Proof sent'}</button>`}
+      </div>
+      <p class="body small" style="margin-top:12px;text-align:center">Camera only. We never open your photo library.</p>
+    </div>`;
+}
+
+/* ============================================================================
+   SCREEN: CAMERA
+   ========================================================================== */
+function viewCamera() {
+  const video = S.camMode === 'video';
+  return `<div class="cam">
+    <div class="cam__top">
+      <button class="cam__btn" data-act="closeCam" aria-label="Close">${IC.cross}</button>
+      <span class="cam__label">CAMERA</span>
+      <button class="cam__btn" data-act="flash" aria-label="Flash">${IC.flash}</button>
+    </div>
+    <div class="cam__modes">
+      <button data-act="camMode" data-m="photo" aria-pressed="${!video}">Photo</button>
+      <button data-act="camMode" data-m="video" aria-pressed="${video}">Video</button>
+    </div>
+    <div class="cam__view">
+      ${img(video ? 'camvideo' : 'camview')}
+      <div class="cam__grid"></div>
+      <div class="cam__rec"><span class="cam__dot" style="${video ? '' : 'opacity:.25'}"></span>${video ? 'REC 00:07' : 'STILL'}</div>
+      <div class="cam__mode">${video ? 'VIDEO · 30S MAX' : 'PHOTO · STILL'}</div>
+    </div>
+    <div class="cam__bottom">
+      ${video ? `<svg class="ring" viewBox="0 0 92 92"><circle class="bg" cx="46" cy="46" r="43"/><circle class="fg" cx="46" cy="46" r="43" stroke-dasharray="270.2" stroke-dashoffset="198"/></svg>` : ''}
+      <button class="shutter ${video ? 'shutter--rec' : ''}" data-act="shutter" aria-label="Capture"></button>
+    </div>
+    <div class="cam__sim">SIMULATOR — no camera on this machine.<button data-act="sampleShot">Use sample photo</button></div>
+  </div>
+  <div class="flash" id="flashEl"></div>`;
+}
+
+/* ============================================================================
+   SCREEN: PREVIEW + CAPTION
+   ========================================================================== */
+function viewPreview() {
+  const c = challenge(S.challengeId) || challenges()[0];
+  return `<div style="position:absolute;inset:0;background:var(--paper);display:flex;flex-direction:column">
+    <div class="cam__top" style="padding:60px 8px 8px;color:var(--ink);background:var(--paper)">
+      <button class="tb-btn" data-act="back" aria-label="Back">${IC.chevL}</button>
+      <span class="cam__label" style="color:var(--ink)">PREVIEW</span>
+      <span style="width:38px"></span>
+    </div>
+    <div style="flex:1;min-height:0;background:#000;overflow:hidden;display:grid;place-items:center">
+      <img src="${PIC(S.captured.seed)}" alt="Captured proof" style="max-height:100%;max-width:100%;object-fit:cover" draggable="false">
+    </div>
+    <div style="padding:14px 16px 34px;border-top:2px solid var(--ink);background:var(--paper);flex:0 0 auto">
+      <div class="meta meta--ink">${esc(c.title.toUpperCase())}</div>
+      <div style="margin-top:10px">
+        <label class="field__label" for="cap">Caption (optional)</label>
+        <input class="input" id="cap" value="${esc(S.caption)}" data-bind="caption" maxlength="200" placeholder="Say something. Or don't." autocomplete="off">
+        <p class="hint"><span id="capCount">${S.caption.length}</span>/200</p>
+      </div>
+      <div class="btnrow" style="padding:0;margin-top:14px;flex-direction:column;gap:10px">
+        <button class="btn btn--primary btn--block" data-act="postProof">Post proof</button>
+        <button class="btn btn--block" data-act="retake">Retake</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================================
+   SCREEN: UPLOAD
+   ========================================================================== */
+function viewUpload() {
+  const c = challenge(S.challengeId) || challenges()[0];
+  if (S.upload.done) {
+    return `<div style="position:absolute;inset:0;background:var(--paper);display:flex;flex-direction:column">
+      <div class="uphead">
+        <span class="meta meta--ink">${esc(c ? c.title.toUpperCase() : 'PROOF')}</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 22px">
+        <span class="stamp stamp--pending stamp--slam" style="align-self:flex-start;font-size:34px;padding:12px 18px 10px">Pending</span>
+        <h2 class="h2" style="padding:0;margin-top:22px">SENT. NOW WAIT.</h2>
+        <p class="body" style="padding:0;max-width:30ch">The crew has to vote on it. We'll ping you the second it lands.</p>
+        <div class="pad" style="padding:0;margin-top:26px">
+          <button class="btn btn--primary btn--block" data-act="backToWeek">Back to week</button>
+        </div>
+      </div>
+      <div style="height:34px"></div>
+    </div>`;
+  }
+  return `<div style="position:absolute;inset:0;background:var(--paper);display:flex;flex-direction:column">
+    <div class="uphead">
+      <span class="meta meta--ink">${esc(c ? c.title.toUpperCase() : 'PROOF')}</span>
+    </div>
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:0 22px">
+      <div class="upshot">
+        <img src="${PIC(S.captured.seed)}" alt="Proof being uploaded" draggable="false">
+        <span class="upshot__tag">UPLOADING</span>
+      </div>
+      <h2 class="h2" style="padding:0;margin-top:22px">SENDING IT</h2>
+      <p class="body" style="padding:0;max-width:30ch">One photo, one video, no take-backs after this.</p>
+      <div class="bar" style="margin-top:18px"><div class="bar__fill" id="upFill" style="width:${S.upload.p}%"></div></div>
+      <p class="meta meta--ink" id="upPct" style="margin-top:9px">${S.upload.p}%</p>
+    </div>
+    <div style="height:34px"></div>
+  </div>`;
+}
+function mountUpload() {
+  if (S.upload.done) return;
+  clearInterval(S.upTimer);
+  S.upTimer = setInterval(() => {
+    if (S.screen !== 'upload') { clearInterval(S.upTimer); return; }
+    S.upload.p = Math.min(100, S.upload.p + (S.upload.p < 70 ? 7 : 3));
+    const fill = $('#upFill'), pct = $('#upPct');
+    if (fill) fill.style.width = S.upload.p + '%';
+    if (pct) pct.textContent = S.upload.p + '%';
+    if (S.upload.p >= 100) {
+      clearInterval(S.upTimer);
+      S.upload.done = true;
+      render();
+      if (!S.notifAsked) {
+        S.notifAsked = true;
+        setTimeout(() => {
+          /* only still ask if we are still looking at the finished upload */
+          if (S.screen === 'upload' && S.upload.done) { S.overlay = { type: 'notif' }; render(); }
+        }, RM ? 200 : 900);
+      }
+    }
+  }, 90);
+}
+
+/* ============================================================================
+   SCREEN: VOTE
+   ========================================================================== */
+function challengeIn(gid, cid) {
+  return (S.data.challenges[gid] || []).find(c => c.id === cid);
+}
+function voteQueue() {
+  const list = pendingSubs();
+  if (!S.queue) { S.queue = []; S.queueKey = ''; }
+  const key = S.groupId + '|' + S.variant.vote;
+  if (S.queueKey !== key) { S.queue = list.map(s => s.id); S.queueKey = key; }
+  const ids = new Set(list.map(s => s.id));
+  S.queue = S.queue.filter(id => ids.has(id));
+  list.forEach(s => { if (!S.queue.includes(s.id)) S.queue.push(s.id); });
+  return S.queue.map(id => list.find(s => s.id === id)).filter(Boolean);
+}
+function voteCard(s, i) {
+  const m = member(s.user);
+  const c = challengeIn(s.g, s.cid);
+  const top = i === 0;
+  const voted = s.mv !== null && s.mv !== undefined;
+  /* the front card must paint above the ones behind it */
+  const style = top
+    ? 'style="z-index:10"'
+    : `style="transform:translateY(${i * 22}px) scale(${1 - i * 0.025});z-index:${10 - i}"`;
+  return `<div class="vcard" ${top ? 'data-top="1"' : ''} ${style}>
+    <img class="vcard__img" src="${PIC(s.seed)}" alt="Proof from ${esc(m.name)}" draggable="false">
+    <div class="vcard__scrim"></div>
+    <div class="vcard__top">
+      <span class="gav" style="width:34px;height:34px;font-size:17px;border-color:#fff">${m.emoji}</span>
+      <span>
+        <span class="vcard__who">${esc(m.name)}</span>
+        <span class="vcard__chal">${esc((c ? c.title : '').toUpperCase())}${s.type === 'video' ? ' · VIDEO' : ''}</span>
+      </span>
+    </div>
+    <div class="vcard__stamp vcard__stamp--ok" id="stampOk">Approve</div>
+    <div class="vcard__stamp vcard__stamp--no" id="stampNo">Reject</div>
+    ${s.cap ? `<div class="vcard__cap">${esc(s.cap)}</div>` : ''}
+    <div class="vcard__verdict"></div>
+  </div>`;
+}
+function viewVote() {
+  const v = S.variant.vote;
+  const head = topbar({ title:'Vote' });
+  if (v === 'empty') {
+    return `${head}<div style="padding-bottom:30px">${stateBlock('NOTHING TO VOTE ON', 'Your crew is quiet. Enjoy it while it lasts.', 'BACK TO WEEK', 'tab', IC.check, 'week')}</div>`;
+  }
+  if (v === 'error') {
+    return `${head}<div style="padding-bottom:30px">${stateBlock("VOTES DIDN'T LOAD", 'The server had a moment. Your votes are safe.', 'TRY AGAIN', 'retry', IC.warn)}</div>`;
+  }
+  if (v === 'offline') {
+    return `${head}<div style="padding-bottom:30px">${offlineNote('Votes need a connection. We will not lose them.')}${stateBlock('OFFLINE', "You can look, but you can't judge until you're back online.", 'RETRY', 'retry', IC.offline)}</div>`;
+  }
+  const q = voteQueue();
+  const s = q[0];
+  if (!s) {
+    return `${head}<div style="padding-bottom:30px">${stateBlock('NOTHING TO VOTE ON', 'Your crew is quiet. Enjoy it while it lasts.', 'BACK TO WEEK', 'tab', IC.check, 'week')}</div>`;
+  }
+  const elig = s.elig;
+  const voted = s.mv !== null && s.mv !== undefined;
+  return `${head}
+    <div style="padding-bottom:30px">
+      <h1 class="h1" style="font-size:32px">YOUR CREW IS WAITING</h1>
+      <p class="body meta" style="padding:8px 16px 0">${myPendingCount()} PROOF${myPendingCount() === 1 ? '' : 'S'} LEFT TO JUDGE</p>
+      ${elig === 0 ? `<div class="pad" style="margin-top:16px">${stateBlock('NOBODY ELSE IS HERE', 'Solo group: nobody can vote on your proof. Invite friends to get votes.', 'INVITE FRIENDS', 'inviteFriends', IC.bell)}</div>`
+      : `<div class="stack">${q.slice(0, 3).map((x, i) => voteCard(x, i)).join('')}</div>
+        <div class="vcontrols">
+          <div class="tally">
+            <span class="meta">Tally</span>
+            <span class="tally__n">${voted ? `${s.ap}/${approveNeeded(s)} approvals · ${s.re}/${rejectNeeded(s)} rejections` : 'hidden until you vote'}</span>
+          </div>
+          <div class="vote_acts">
+            <button class="btn btn--reject" data-act="vote" data-v="0" ${s.mv === false ? 'style="box-shadow:none;transform:translate(3px,3px)"' : ''}>${IC.cross}<span>Nah</span></button>
+            <button class="btn btn--approve" data-act="vote" data-v="1" ${s.mv === true ? 'style="box-shadow:none;transform:translate(3px,3px)"' : ''}>${IC.check}<span>Approved</span></button>
+          </div>
+          ${voted ? `<button class="btn btn--block" style="margin-top:12px" data-act="voteNext">Next proof</button>` : ''}
+          <p class="vote_hint">Swipe right to approve · left to send it back</p>
+        </div>`}
+    </div>`;
+}
+function mountVote() {
+  const card = $('.vcard[data-top]');
+  if (!card) return;
+  let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false;
+  const ok = $('#stampOk', card), no = $('#stampNo', card);
+  card.addEventListener('pointerdown', e => {
+    dragging = true; sx = e.clientX; sy = e.clientY;
+    card.setPointerCapture(e.pointerId);
+    card.style.transition = 'none';
+    e.preventDefault();
+  });
+  card.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    dx = e.clientX - sx; dy = e.clientY - sy;
+    card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.045}deg)`;
+    const p = Math.min(1, Math.abs(dx) / 110);
+    if (ok) ok.style.opacity = dx > 0 ? p : 0;
+    if (no) no.style.opacity = dx < 0 ? p : 0;
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    card.style.transition = '';
+    if (Math.abs(dx) > 100) {
+      commitVote(dx > 0);
+    } else {
+      card.style.transform = '';
+      if (ok) ok.style.opacity = 0;
+      if (no) no.style.opacity = 0;
+    }
+    dx = 0; dy = 0;
+  };
+  card.addEventListener('pointerup', end);
+  card.addEventListener('pointercancel', end);
+}
+/* ============================================================================
+   SCREEN: FEED
+   ========================================================================== */
+function feedStamp(s) {
+  if (s.status === 'accepted') return stamp('ok', 'Accepted', 'stamp--sm');
+  if (s.status === 'rejected') return stamp('no', 'Rejected', 'stamp--sm');
+  return stamp('pending', 'Pending', 'stamp--sm');
+}
+function viewFeed() {
+  const v = S.variant.feed;
+  const head = topbar({ title:'Feed' });
+  if (v === 'empty') {
+    return `${head}<div style="padding-bottom:30px">${stateBlock("NOBODY'S POSTED YET", "Be the first, set the bar.", 'POST A PROOF', 'tab', IC.inbox, 'week')}</div>`;
+  }
+  if (v === 'error') {
+    return `${head}<div style="padding-bottom:30px">${stateBlock("FEED DIDN'T LOAD", 'The server had a moment. Give it a second.', 'TRY AGAIN', 'retry', IC.warn)}</div>`;
+  }
+  const items = subsOf(S.groupId);
+  if (S.variant.feed === 'offline') {
+    return `${head}<div style="padding-bottom:30px">${offlineNote('Showing proofs from the last sync.')}</div>`;
+  }
+  const locked = S.feedLocked || !S.posted;
+  const seg = `<div class="seg">
+    <button data-act="feedMode" data-m="grid" aria-pressed="${S.feedMode === 'grid'}">Grid</button>
+    <button data-act="feedMode" data-m="list" aria-pressed="${S.feedMode === 'list'}">List</button>
+  </div>`;
+  const title = `<h1 class="h1">THE FEED</h1>
+    <p class="body meta" style="padding:8px 16px 0">${items.length} PROOFS · ${curGroup().name.toUpperCase()}</p>`;
+
+  let body;
+  if (S.feedMode === 'grid') {
+    body = `<div class="fgrid">
+      ${items.map(s => {
+        const blur = locked && s.user !== ME;
+        return `<div class="fcell ${blur ? 'fcell--locked' : ''}">
+          <div class="fcell__shot">
+            <img class="fcell__img" src="${PIC(s.seed)}" alt="Proof" draggable="false">
+            ${blur ? `<div class="fcell__lock"><b>Post one<br>to unlock</b></div>` : feedStamp(s)}
+          </div>
+          <div class="fcell__foot">
+            <span class="meta">${esc(member(s.user).name.toUpperCase())}</span>
+            <span class="meta">${esc(s.ago.toUpperCase())}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } else {
+    body = `<div class="flist">
+      ${items.map(s => {
+        const blur = locked && s.user !== ME;
+        return `<div class="frow">
+          <div class="frow__thumb">
+            <img class="frow__img" src="${PIC(s.seed)}" alt="Proof" draggable="false" style="${blur ? 'filter:blur(12px)' : ''}">
+          </div>
+          <div class="frow__body">
+            <div class="meta meta--ink">${esc(member(s.user).name.toUpperCase())} · ${esc(s.ago.toUpperCase())}</div>
+            <div style="font-size:13.5px;line-height:1.3;margin-top:3px">${esc(s.cap || '—')}</div>
+            <div class="frow__stamp">${blur ? '<span class="chip chip--todo">Locked</span>' : feedStamp(s)}</div>
+          </div>
+          ${IC.chevR}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+  const lockNote = locked ? `<div class="banner">${IC.lock}<div><b>Locked</b><p>Post one proof this week and everyone else's opens up.</p></div></div>` : '';
+  return `${head}<div style="padding-bottom:30px">${title}${lockNote}${seg}${body}</div>`;
+}
+
+/* ============================================================================
+   SCREEN: BOARD
+   ========================================================================== */
+function moveTag(m) {
+  if (m > 0) return `<span class="move move--up">↑${m}</span>`;
+  if (m < 0) return `<span class="move move--down">↓${Math.abs(m)}</span>`;
+  return `<span class="move move--flat">—</span>`;
+}
+function viewBoard() {
+  const g = curGroup();
+  const b = S.data.board[S.groupId];
+  const scope = S.boardScope;
+  const pts = b[scope];
+  const rows = g.members.map(id => ({
+    id, pts: pts[id] || 0, move: b.move[id] || 0, streak: b.streak[id] || 0
+  })).sort((a, c) => c.pts - a.pts || a.id.localeCompare(c.id));
+  /* podium order on screen: 2nd, 1st, 3rd — place number travels with the row */
+  const podium = [
+    rows[1] ? { r: rows[1], place: 2 } : null,
+    rows[0] ? { r: rows[0], place: 1 } : null,
+    rows[2] ? { r: rows[2], place: 3 } : null
+  ].filter(Boolean);
+
+  const head = `${topbar({ title:'Board' })}
+    <h1 class="h1">THE BOARD</h1>
+    <div class="body" style="padding:8px 16px 0;display:flex;align-items:center;gap:8px">
+      ${IC.flame}<b style="font:700 13px/1 inherit;letter-spacing:.04em">${g.streak} WEEK GROUP STREAK</b>
+    </div>
+    <div class="seg" style="margin-top:14px">
+      <button data-act="boardScope" data-s="week" aria-pressed="${scope === 'week'}">This week</button>
+      <button data-act="boardScope" data-s="all" aria-pressed="${scope === 'all'}">All time</button>
+    </div>`;
+
+  const pod = `<div class="podium">
+    ${podium.map(p => `<div class="pod pod--${p.place}">
+      <span class="pod__av">${member(p.r.id).emoji}</span>
+      <span class="pod__name">${esc(member(p.r.id).name.toUpperCase())}</span>
+      <div class="pod__box">
+        <span class="pod__n">${p.place}</span>
+        <span class="pod__pts">${p.r.pts} PTS</span>
+      </div>
+    </div>`).join('')}
+  </div>`;
+
+  const list = `<div style="margin-top:6px;border-top:2px solid var(--ink)">
+    ${rows.map((r, i) => `<div class="rank">
+      <span class="rank__n">${i + 1}</span>
+      <span class="gav" style="width:36px;height:36px;font-size:18px">${member(r.id).emoji}</span>
+      <span class="rank__who">
+        <span class="rank__name">${esc(member(r.id).name.toUpperCase())}${flameChip(r.streak)}</span>
+        <span class="meta">${moveTag(r.move)} ${r.id === ME ? '· YOU' : ''}</span>
+      </span>
+      <span class="rank__pts">${r.pts}<small>PTS</small></span>
+    </div>`).join('')}
+  </div>`;
+
+  const blocks = `<h2 class="h2" style="font-size:20px">YOUR LAST 6 WEEKS</h2>
+    <div class="blocks">
+      ${S.data.myBlocks.map((b2, i) => `<span class="block ${b2 ? '' : 'block--miss'}" title="Week ${i + 1}"></span>`).join('')}
+    </div>
+    <p class="body small" style="margin-top:9px">One cracked block = one missed week. No shame, just a crack.</p>`;
+
+  const recap = `<div class="pad" style="margin-top:22px"><button class="btn btn--block" data-act="go" data-screen="recap">Weekly recap</button></div>`;
+  return `${head}<div style="padding-bottom:34px">${pod}${list}${blocks}${recap}</div>`;
+}
+
+/* ============================================================================
+   SCREEN: WEEKLY RECAP (receipt)
+   ========================================================================== */
+function receiptClip(teeth = 18) {
+  const step = 100 / teeth, pts = [];
+  for (let i = 0; i < teeth; i++) {
+    pts.push(`${(i * step).toFixed(3)}% 0%`, `${(i * step + step / 2).toFixed(3)}% 2.2%`);
+  }
+  pts.push('100% 0%');
+  for (let i = teeth - 1; i >= 0; i--) {
+    pts.push(`${(i * step + step / 2).toFixed(3)}% 97.8%`, `${(i * step).toFixed(3)}% 100%`);
+  }
+  pts.push('0% 100%');
+  return `polygon(${pts.join(',')})`;
+}
+function viewRecap() {
+  const r = S.data.myRecap;
+  const g = curGroup();
+  return `${topbar({ title:'Weekly recap', back:true })}
+    <div class="receipt-wrap">
+      <div class="receipt" style="clip-path:${receiptClip()};filter:drop-shadow(4px 4px 0 rgba(0,0,0,.4))">
+        <div class="receipt__brand">${esc(APP_NAME)}</div>
+        <div class="receipt__sub">${esc(g.name.toUpperCase())}</div>
+        <div class="receipt__rule"></div>
+        <div class="receipt__row"><span>${r.week}</span><span>${r.dates}</span></div>
+        <div class="receipt__rule"></div>
+        ${r.lines.map(([a, b]) => `<div class="receipt__row"><span>${esc(a)}</span><b>+${b}</b></div>`).join('')}
+        <div class="receipt__rule"></div>
+        <div class="receipt__row"><span>STILL PENDING</span><span>—</span></div>
+        ${r.pending.map(p => `<div class="receipt__row"><span>${esc(p)}</span><span>—</span></div>`).join('')}
+        <div class="receipt__rule"></div>
+        <div class="receipt__total"><span>TOTAL</span><span>+${r.total}</span></div>
+        <div class="receipt__foot">Thank you, come again</div>
+      </div>
+      <div class="pad" style="margin-top:22px;display:flex;gap:10px">
+        <button class="btn btn--primary" style="flex:1" data-act="shareRecap">${IC.share}<span>Share</span></button>
+        <button class="btn" style="flex:1" data-act="go" data-screen="board">${IC.trophy}<span>Board</span></button>
+      </div>
+      <p class="body small" style="margin-top:12px;text-align:center">Shareable as a portrait image. The receipt is the trophy.</p>
+    </div>`;
+}
+
+/* ============================================================================
+   SCREEN: GROUP SETTINGS
+   ========================================================================== */
+function viewGroupSettings() {
+  const g = curGroup();
+  const isOwner = g.owner === ME;
+  return `${topbar({ title:'Group settings', back:true })}
+    <div style="padding-bottom:34px">
+      <h1 class="h1" style="font-size:34px">${esc(g.name.toUpperCase())}</h1>
+      <div class="codebox" style="margin-top:18px">
+        <p class="meta" style="text-align:center">INVITE CODE</p>
+        <div class="codebox__code">${g.code}</div>
+        <div class="btnrow" style="padding:14px 0 0;gap:8px">
+          <button class="btn btn--sm" style="flex:1" data-act="copyCode">${IC.copy}<span>Copy</span></button>
+          <button class="btn btn--sm btn--primary" style="flex:1" data-act="shareCode">${IC.share}<span>Share</span></button>
+        </div>
+      </div>
+
+      <h2 class="h2" style="font-size:20px">MEMBERS · ${g.members.length}</h2>
+      <div>
+        ${g.members.map(id => `<div class="member">
+          <span class="gav" style="width:38px;height:38px;font-size:19px">${member(id).emoji}</span>
+          <span class="member__name">${esc(member(id).name)}${id === ME ? ' · you' : ''}</span>
+          ${id === g.owner ? '<span class="badge">OWNER</span>' : ''}
+        </div>`).join('')}
+      </div>
+      <div class="pad" style="margin-top:16px"><button class="btn btn--block" data-act="shareCode">${IC.share}<span>Invite a friend</span></button></div>
+
+      ${isOwner ? `<h2 class="h2" style="font-size:20px">OWNER SETTINGS</h2>
+        <div class="field">
+          <label class="field__label" for="gname">Group name</label>
+          <input class="input" id="gname" value="${esc(g.name)}" data-bind="gname" maxlength="40" autocomplete="off">
+        </div>
+        <div class="field" style="margin-top:20px">
+          <span class="field__label">Challenges per week</span>
+          <div class="stepper">
+            <button data-act="perWeek" data-d="-1" aria-label="Fewer">−</button>
+            <span class="stepper__val">${g.perWeek}</span>
+            <button data-act="perWeek" data-d="1" aria-label="More">+</button>
+          </div>
+        </div>
+        <div class="field" style="margin-top:20px">
+          <label class="field__label" for="gtheme">Theme</label>
+          <input class="input" id="gtheme" value="${esc(g.theme)}" data-bind="gtheme" maxlength="200" placeholder="low-key chaos, nothing humiliating" autocomplete="off">
+        </div>
+        <p class="body small" style="margin-top:12px">Changes apply from next week. This week stays as it is.</p>`
+      : `<div class="pad" style="margin-top:20px"><p class="body small">${esc(member(g.owner).name)} owns this group. Only they can change the rules.</p></div>`}
+
+      <div class="pad" style="margin-top:26px">
+        <button class="btn btn--danger btn--block" data-act="leaveGroup">${IC.exit}<span>Leave group</span></button>
+      </div>
+      <div style="height:22px"></div>
+    </div>`;
+}
+
+/* ============================================================================
+   SCREEN: PROFILE
+   ========================================================================== */
+function viewProfile() {
+  return `${topbar({ title:'Profile', back:true })}
+    <div style="padding-bottom:34px">
+      <div class="pad" style="display:flex;gap:16px;align-items:center;margin-top:18px">
+        <span class="gav gav--lg">${S.user.emoji}</span>
+        <div>
+          <div class="h3">${esc(S.user.name.toUpperCase())}</div>
+          <button class="linkbtn" style="padding:6px 0 0" data-act="changeEmoji">Change face</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field__label" for="pname">Display name</label>
+        <input class="input" id="pname" value="${esc(S.user.name)}" data-bind="name" maxlength="24" autocomplete="off">
+      </div>
+
+      <h2 class="h2" style="font-size:20px;margin-top:24px">NOTIFICATIONS</h2>
+      <div class="member" data-act="toggleNotif" style="cursor:pointer">
+        <span class="gav" style="width:36px;height:36px;font-size:18px">${IC.bell}</span>
+        <span style="flex:1">
+          <span class="member__name" style="display:block">Push notifications</span>
+          <span class="meta">${S.notifOn ? 'ON · Dares, votes, verdicts' : 'OFF · You will not hear about anything'}</span>
+        </span>
+        <span class="switch" role="switch" aria-checked="${S.notifOn}"></span>
+      </div>
+      ${S.notifAsked ? '' : '<p class="body small" style="margin-top:10px">We ask after your first proof, not before. Nobody wants a popup on day one.</p>'}
+
+      <h2 class="h2" style="font-size:20px;margin-top:24px">ACCOUNT</h2>
+      <div class="pad" style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn--block" data-act="signOut">${IC.exit}<span>Sign out</span></button>
+        <button class="btn btn--danger btn--block" data-act="deleteAccount">${IC.trash}<span>Delete account</span></button>
+      </div>
+      <p class="body small" style="margin-top:14px">Deleting removes your account and every proof you've posted. Apple requires it, and so does basic decency.</p>
+    </div>`;
+}
+/* ============================================================================
+   VOTING LOGIC (SPEC thresholds)
+   ========================================================================== */
+function awardPoints(s) {
+  const c = challengeIn(s.g, s.cid);
+  const b = S.data.board[s.g];
+  if (!c || !b) return;
+  /* first to finish: nobody else got an accepted proof for this dare this week */
+  const first = !S.data.submissions.some(x =>
+    x.cid === s.cid && x.week === s.week && x.id !== s.id && x.status === 'accepted');
+  const pts = c.points + (first ? 10 : 0);
+  b.week[s.user] = (b.week[s.user] || 0) + pts;
+  b.all[s.user] = (b.all[s.user] || 0) + pts;
+  s.awarded = pts;
+  s.awardedFirst = first;
+}
+function commitVote(approve) {
+  const q = voteQueue();
+  const s = q[0];
+  if (!s || s.elig === 0) return;
+  const card = $('.vcard[data-top]');       // grab before any re-render
+  const before = { ap: s.ap, re: s.re, mv: s.mv, status: s.status };
+  if (s.mv === null || s.mv === undefined) {
+    approve ? s.ap++ : s.re++;
+  } else if (s.mv !== approve) {
+    if (s.mv === true) s.ap--; else s.re--;
+    approve ? s.ap++ : s.re++;
+  }
+  s.mv = approve;
+  S.undo = { id: s.id, before };
+
+  let decided = null;
+  if (s.ap >= approveNeeded(s)) { s.status = 'accepted'; decided = 'accepted'; }
+  else if (s.re >= rejectNeeded(s)) { s.status = 'rejected'; decided = 'rejected'; }
+  if (decided) awardPoints(s);
+
+  if (!decided) {
+    render();
+    toast('Vote saved.', 'Undo', 'undoVote');
+    return;
+  }
+  const name = member(s.user).name;
+  if (!card) { render(); return; }
+  const v = card.querySelector('.vcard__verdict');
+  if (v) v.innerHTML = stamp(decided === 'accepted' ? 'ok' : 'no', decided === 'accepted' ? 'ACCEPTED' : 'REJECTED', 'stamp--big stamp--slam');
+  card.style.transition = 'transform .34s cubic-bezier(.2,.8,.3,1), opacity .34s ease';
+  setTimeout(() => {
+    card.style.transform = 'translateX(115%) rotate(22deg)';
+    card.style.opacity = '0';
+  }, RM ? 0 : 620);
+  setTimeout(() => {
+    render();
+    if (decided === 'accepted') {
+      toast(`Accepted. ${name} gets +${s.awarded || 0}${s.awardedFirst ? ' (first to finish)' : ''}.`, 'Undo', 'undoVote');
+    } else {
+      toast(`Nah, try again. ${name} needs a new proof.`, 'Undo', 'undoVote');
+    }
+  }, RM ? 120 : 1020);
+}
+function undoVote() {
+  if (!S.undo) return;
+  const s = S.data.submissions.find(x => x.id === S.undo.id);
+  if (s) {
+    s.ap = S.undo.before.ap; s.re = S.undo.before.re;
+    s.mv = S.undo.before.mv; s.status = S.undo.before.status;
+    if (s.awarded) {
+      const b = S.data.board[s.g];
+      if (b) { b.week[s.user] = (b.week[s.user] || 0) - s.awarded; b.all[s.user] = (b.all[s.user] || 0) - s.awarded; }
+      s.awarded = 0;
+    }
+  }
+  S.undo = null;
+  closeToast();
+  render();
+}
+
+/* ============================================================================
+   ACTIONS
+   ========================================================================== */
+const ACT = {
+  onbNext() {
+    if (S.onboard < ONB.length - 1) { S.onboard++; render(); }
+    else go('signin');
+  },
+  onbSkip() { go('signin'); },
+  appleSignIn() { go('setupProfile'); },
+  tryDemo() { S.posted = true; go('groups'); },
+  pickEmoji(t) { S.user.emoji = t.dataset.emoji; S.overlay = null; render(); },
+  saveProfile() { go('groups'); },
+  pickGroup(t) {
+    const g = S.data.groups.find(x => x.id === t.dataset.id);
+    if (g) {
+      S.groupId = g.id;
+      S.queue = null; S.queueKey = '';
+      S.overlay = null;
+      syncMyStatus();
+      go('week');
+    }
+  },
+  go(t) { go(t.dataset.screen); },
+  back() { back(); },
+  tab(t) { switchTab(t.dataset.tab); },
+  perWeek(t) {
+    const d = Number(t.dataset.d);
+    if (S.screen === 'createGroup') {
+      const dr = draft();
+      dr.perWeek = Math.min(10, Math.max(3, dr.perWeek + d));
+      render();
+    } else {
+      const g = curGroup();
+      g.perWeek = Math.min(10, Math.max(3, g.perWeek + d));
+      render();
+    }
+  },
+  createGroup() {
+    const d = draft();
+    if (!d.name.trim()) { toast('Give the group a name first.'); return; }
+    const id = 'g' + (S.data.groups.length + 1);
+    S.data.groups.push({
+      id, name: d.name.trim(), code: 'NEWGRP', perWeek: d.perWeek, theme: d.theme,
+      members: [ME], owner: ME, streak: 0
+    });
+    S.data.challenges[id] = [
+      { id: id + 'c1', title:'First dare', desc:'The week is young. Prove something small.', diff:'easy', points:10 },
+      { id: id + 'c2', title:'Second dare', desc:'Something a bit braver.', diff:'medium', points:25 },
+      { id: id + 'c3', title:'Third dare', desc:'The hard one. Film it.', diff:'hard', points:50 }
+    ];
+    S.data.board[id] = { week: { [ME]: 0 }, all: { [ME]: 0 }, move: { [ME]: 0 }, streak: { [ME]: 0 } };
+    S.groupId = id;
+    S.myStatus = { [id + 'c1']:'todo', [id + 'c2']:'todo', [id + 'c3']:'todo' };
+    curGroup().myStatus = S.myStatus;
+    S.draft = { name:'', perWeek:5, theme:'', code:'' };
+    S.queue = null; S.queueKey = '';
+    go('week');
+    toast('Group created. This week\'s dares are in.');
+  },
+  joinGroup() {
+    const code = (draft().code || '').toUpperCase().trim();
+    if (code.length !== 6) { toast('Six characters. Count them twice.'); return; }
+    const g = S.data.groups.find(x => x.code === code);
+    if (!g) { toast('No group with that code.'); return; }
+    if (!g.members.includes(ME)) g.members.push(ME);
+    S.groupId = g.id;
+    S.queue = null; S.queueKey = '';
+    S.draft.code = '';
+    go('week');
+    toast(`You're in. ${g.name} is open.`);
+  },
+  groupPicker() { S.overlay = { type:'groupPicker' }; render(); },
+  closeOverlay() { S.overlay = null; render(); },
+  openChallenge(t) { go('challenge', { id: t.dataset.id }); },
+  proveIt(t) {
+    S.challengeId = t.dataset.id;
+    S.captured = { seed: 'cam' + Math.floor(Math.random() * 999), type: S.camMode };
+    go('camera', { id: S.challengeId });
+  },
+  closeCam() { back(); },
+  camMode(t) { S.camMode = t.dataset.m; render(); },
+  shutter() {
+    const f = $('#flashEl');
+    if (f) { f.classList.add('flash--go'); setTimeout(() => f && f.classList.remove('flash--go'), 460); }
+    setTimeout(() => {
+      S.captured = { seed: 'shot' + Math.floor(Math.random() * 999), type: S.camMode };
+      go('preview', { id: S.challengeId });
+    }, RM ? 0 : 260);
+  },
+  sampleShot() {
+    S.captured = { seed: 'mumdaal', type: 'photo' };
+    go('preview', { id: S.challengeId });
+  },
+  retake() { go('camera', { id: S.challengeId }); },
+  postProof() {
+    const c = challenge(S.challengeId);
+    if (!c) return;
+    S.data.submissions.unshift({
+      id: 'mine' + Date.now(), g: S.groupId, cid: c.id, user: ME, seed: S.captured.seed,
+      cap: S.caption, type: S.captured.type, status: 'pending', ap: 0, re: 0, mv: null,
+      elig: Math.max(0, curGroup().members.length - 1), ago: 'now', week: 'cur'
+    });
+    S.myStatus[c.id] = 'pending';
+    S.posted = true;
+    S.caption = '';
+    S.upload = { p: 0, done: false };
+    go('upload');
+  },
+  backToWeek() { switchTab('week'); },
+  vote(t) { commitVote(t.dataset.v === '1'); },
+  voteNext() {
+    const q = voteQueue();
+    if (q.length > 1) S.queue.push(S.queue.shift());
+    render();
+  },
+  undoVote() { undoVote(); },
+  notifAllow() { S.notifOn = true; S.overlay = null; render(); toast('Notifications on. We\'ll be loud, but only about dares.'); },
+  notifLater() { S.overlay = null; render(); },
+  alertCancel() { S.overlay = null; render(); },
+  alertConfirm() {
+    const fn = S.overlay && S.overlay.onConfirm;
+    S.overlay = null;
+    render();
+    if (fn) fn();
+  },
+  copyCode() { toast('Invite code copied.'); },
+  shareCode() { toast('Share sheet would open here.'); },
+  shareRecap() { toast('Receipt exported as a portrait image.'); },
+  leaveGroup() {
+    S.overlay = {
+      type: 'alert', title: 'Leave ' + curGroup().name + '?',
+      message: 'You keep your account. You lose the streak, the points and the group chat energy.',
+      confirm: 'Leave group', danger: true,
+      onConfirm: () => {
+        const g = curGroup();
+        g.members = g.members.filter(m => m !== ME);
+        S.groupId = (S.data.groups.find(x => x.members.includes(ME)) || S.data.groups[0]).id;
+        S.queue = null; S.queueKey = '';
+        switchTab('groups');
+        toast(`Left ${g.name}.`);
+      }
+    };
+    render();
+  },
+  toggleNotif() {
+    if (!S.notifOn) { S.overlay = { type:'notif' }; render(); }
+    else { S.notifOn = false; render(); }
+  },
+  changeEmoji() { S.overlay = { type:'emoji' }; render(); },
+  signOut() {
+    S.overlay = {
+      type: 'alert', title: 'Sign out?', message: 'You can sign back in with Apple any time.',
+      confirm: 'Sign out',
+      onConfirm: () => { go('signin'); }
+    };
+    render();
+  },
+  deleteAccount() {
+    S.overlay = {
+      type: 'alert', title: 'Delete your account?', message: 'Your account and every proof you posted will be gone. This cannot be undone.',
+      confirm: 'Delete everything', danger: true,
+      onConfirm: () => {
+        const theme = S.theme;
+        S = freshState();
+        S.theme = theme;
+        S.screen = 'signin';
+        S.prev = [];
+        syncMyStatus();
+        render();
+        toast('Account deleted. Clean slate.');
+      }
+    };
+    render();
+  },
+  regenerate() { toast('New set of dares generated.'); },
+  retry() { toast('Reloading.'); },
+  inviteFriends() { go('groupSettings'); },
+  feedMode(t) { S.feedMode = t.dataset.m; render(); },
+  boardScope(t) { S.boardScope = t.dataset.s; render(); }
+};
+
+/* ============================================================================
+   EVENT WIRING
+   ========================================================================== */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]');
+  if (!t) return;
+  const fn = ACT[t.dataset.act];
+  if (!fn) return;
+  e.preventDefault();
+  fn(t);
+});
+document.addEventListener('input', e => {
+  const t = e.target.closest('[data-bind]');
+  if (!t) return;
+  const b = t.dataset.bind;
+  if (b === 'name') S.user.name = t.value;
+  else if (b === 'caption') { S.caption = t.value; const c = $('#capCount'); if (c) c.textContent = S.caption.length; }
+  else if (b === 'draftName') draft().name = t.value;
+  else if (b === 'draftTheme') draft().theme = t.value;
+  else if (b === 'code') {
+    const clean = t.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    draft().code = clean;
+    if (t.value !== clean) { t.value = clean; t.setSelectionRange(clean.length, clean.length); }
+  }
+  else if (b === 'gname') curGroup().name = t.value;
+  else if (b === 'gtheme') curGroup().theme = t.value;
+});
+$('#app').addEventListener('scroll', () => {
+  S.scrollMap = S.scrollMap || {};
+  S.scrollMap[S.screen] = $('#app').scrollTop;
+  syncScrollClass();
+}, { passive: true });
+document.addEventListener('error', e => {
+  if (e.target && e.target.tagName === 'IMG') e.target.classList.add('imgbroken');
+}, true);
+
+/* ============================================================================
+   REVIEW PANEL
+   ========================================================================== */
+const JUMP = [
+  { g:'First run', items:[
+    ['onboarding','Onboarding · 3 slides'],
+    ['signin','Sign in with Apple'],
+    ['setupProfile','Name + emoji'],
+    ['groups','Groups list'],
+    ['createGroup','Create group'],
+    ['joinGroup','Join with code']
+  ]},
+  { g:'Main tabs', items:[
+    ['week','Week · challenge list'],
+    ['challenge','Challenge detail'],
+    ['vote','Vote · card stack'],
+    ['feed','Feed'],
+    ['board','Board · podium'],
+    ['recap','Weekly recap · receipt']
+  ]},
+  { g:'Proof flow', items:[
+    ['camera','Camera'],
+    ['preview','Preview + caption'],
+    ['upload','Uploading + pending stamp']
+  ]},
+  { g:'Account', items:[
+    ['groupSettings','Group settings'],
+    ['profile','Profile']
+  ]},
+  { g:'States', items:[
+    ['state:week:empty','Week · empty'],
+    ['state:week:error','Week · error'],
+    ['state:week:offline','Week · offline'],
+    ['state:vote:empty','Vote · empty'],
+    ['state:vote:error','Vote · error'],
+    ['state:vote:offline','Vote · offline'],
+    ['state:feed:empty','Feed · empty'],
+    ['state:feed:error','Feed · error'],
+    ['state:feed:offline','Feed · offline'],
+    ['state:feed:locked','Feed · locked (no proof yet)']
+  ]}
+];
+function buildJump() {
+  $('#jump').innerHTML = JUMP.map(sec => `
+    <div class="jump__grp">${sec.g}</div>
+    ${sec.items.map(([key, label]) => `<button class="jump__b" data-jump="${key}">${label}</button>`).join('')}
+  `).join('');
+}
+$('#jump').addEventListener('click', e => {
+  const b = e.target.closest('[data-jump]');
+  if (!b) return;
+  const key = b.dataset.jump;
+  if (key.startsWith('state:')) {
+    const [, tab, kind] = key.split(':');
+    if (kind === 'locked') { S.feedLocked = true; S.variant.feed = 'normal'; }
+    else S.variant[tab] = kind;
+    S.queue = null; S.queueKey = '';
+    switchTab(tab);
+  } else {
+    /* a normal screen clears every forced state so the app is back to normal */
+    S.variant = { week: 'normal', vote: 'normal', feed: 'normal' };
+    S.feedLocked = false;
+    S.queue = null; S.queueKey = '';
+    go(key);
+  }
+});
+$('#themeBtn').addEventListener('click', () => {
+  S.theme = S.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = S.theme;
+  updatePanel();
+});
+$('#hazardBtn').addEventListener('click', () => {
+  S.deadline24 = !S.deadline24;
+  render();
+});
+$('#feedLockBtn').addEventListener('click', () => {
+  S.feedLocked = !S.feedLocked;
+  render();
+});$('#resetBtn').addEventListener('click', () => {
+  const theme = S.theme;
+  S = freshState();
+  S.theme = theme;
+  S.screen = 'week';
+  syncMyStatus();
+  render();
+});
+function updatePanel() {
+  const tb = $('#themeBtn');
+  if (tb) { tb.textContent = S.theme === 'light' ? 'Dark mode' : 'Light mode'; tb.setAttribute('aria-pressed', S.theme === 'dark'); }
+  const hb = $('#hazardBtn');
+  if (hb) hb.setAttribute('aria-pressed', !!S.deadline24);
+  const fb = $('#feedLockBtn');
+  if (fb) fb.setAttribute('aria-pressed', !!S.feedLocked);
+  const fs = $('#footScreen');
+  if (fs) fs.textContent = (SCREENS[S.screen] ? S.screen : S.screen).toUpperCase();
+  $$('#jump .jump__b').forEach(b => {
+    const key = b.dataset.jump;
+    let active;
+    if (key.startsWith('state:')) {
+      const [, tab, kind] = key.split(':');
+      const matchesVariant = kind === 'locked'
+        ? (S.screen === 'feed' && !!S.feedLocked)
+        : (S.screen === tab && S.variant[tab] === kind);
+      active = matchesVariant;
+    } else {
+      active = S.screen === key;
+    }
+    b.setAttribute('aria-current', active ? 'true' : 'false');
+  });
+}
+
+/* ============================================================================
+   BOOT
+   ========================================================================== */
+function tickClock() {
+  const d = new Date();
+  const h = d.getHours() % 12 || 12;
+  $('#clock').textContent = h + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+S = freshState();
+syncMyStatus();
+buildJump();
+tickClock();
+/* one name to rule them all */
+document.title = APP_NAME.toUpperCase() + ' — CLICKABLE PROTOTYPE';
+const brand = $('#panelBrand');
+if (brand) brand.textContent = APP_NAME;
+setInterval(tickClock, 20000);
+render();
+
+
+</script>
+</body>
+</html>

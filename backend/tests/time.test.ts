@@ -1,0 +1,108 @@
+import { describe, expect, it } from 'vitest';
+import {
+  getLocalParts,
+  getWeekBounds,
+  isReminderWindow,
+  isValidTimeZone,
+  localDateKey,
+  localWeekdayAndHour,
+  startOfLocalWeek,
+  zonedTimeToUnix,
+} from '../src/business/time';
+
+const UTC_START = 1_736_121_600; // Mon 2025-01-06 00:00:00 UTC
+
+describe('week boundaries', () => {
+  it('computes a UTC week from a mid-week instant', () => {
+    expect(getWeekBounds(1_736_337_600, 'UTC')).toEqual({
+      startsAt: 1_736_121_600,
+      endsAt: 1_736_726_399,
+      voteDeadline: 1_736_769_600,
+    });
+  });
+
+  it('uses Monday 00:00 local, not UTC, in Europe/Paris', () => {
+    const bounds = getWeekBounds(1_736_119_800, 'Europe/Paris'); // Mon 00:30 local
+    expect(bounds.startsAt).toBe(1_736_118_000); // Mon 00:00 CET
+    expect(bounds.endsAt).toBe(1_736_722_799);
+    expect(bounds.voteDeadline).toBe(1_736_766_000);
+  });
+
+  it('still belongs to the previous week late Sunday night in Paris', () => {
+    const bounds = getWeekBounds(1_736_116_200, 'Europe/Paris'); // Sun 23:30 local
+    expect(bounds.startsAt).toBe(1_735_513_200); // Mon 2024-12-30 00:00 CET
+    expect(bounds.endsAt).toBe(1_736_117_999);
+  });
+
+  it('handles the spring-forward week in America/New_York', () => {
+    const bounds = getWeekBounds(1_741_780_800, 'America/New_York'); // Wed Mar 12 12:00Z
+    expect(bounds.startsAt).toBe(1_741_579_200); // Mon Mar 10 00:00 EDT
+    expect(bounds.endsAt).toBe(1_742_183_999);
+    expect(bounds.voteDeadline).toBe(1_742_227_200);
+  });
+
+  it('handles the fall-back week in America/New_York', () => {
+    const instant = 1_761_624_000; // Tue Oct 28 2025 00:00Z
+    const bounds = getWeekBounds(instant, 'America/New_York');
+    expect(bounds.startsAt).toBe(1_761_537_600); // Mon Oct 27 00:00 EDT
+    expect(bounds.endsAt).toBe(1_762_145_999);
+    expect(bounds.voteDeadline).toBe(1_762_189_200);
+    // The local week is 7 days + 1 hour long across the DST transition.
+    expect(bounds.endsAt + 1 - bounds.startsAt).toBe(7 * 86_400 + 3_600);
+  });
+
+  it('handles Asia/Tokyo (no DST, UTC+9)', () => {
+    const bounds = getWeekBounds(1_736_294_400, 'Asia/Tokyo');
+    expect(bounds.startsAt).toBe(1_736_089_200);
+    expect(bounds.endsAt).toBe(1_736_693_999);
+    expect(bounds.voteDeadline).toBe(1_736_737_200);
+  });
+
+  it('handles Pacific/Auckland summer time (UTC+13)', () => {
+    const bounds = getWeekBounds(1_736_294_400, 'Pacific/Auckland');
+    expect(bounds.startsAt).toBe(1_736_074_800);
+    expect(bounds.endsAt).toBe(1_736_679_599);
+    expect(bounds.voteDeadline).toBe(1_736_722_800);
+  });
+
+  it('puts Sunday 23:59:59 and Monday 00:00 on the correct sides', () => {
+    expect(getWeekBounds(1_736_726_399, 'UTC').startsAt).toBe(UTC_START);
+    expect(getWeekBounds(1_736_726_400, 'UTC').startsAt).toBe(1_736_726_400);
+  });
+});
+
+describe('timezone helpers', () => {
+  it('validates IANA zones', () => {
+    expect(isValidTimeZone('UTC')).toBe(true);
+    expect(isValidTimeZone('America/New_York')).toBe(true);
+    expect(isValidTimeZone('Mars/Olympus_Mons')).toBe(false);
+    expect(isValidTimeZone('')).toBe(false);
+  });
+
+  it('round-trips a local wall clock through DST', () => {
+    expect(zonedTimeToUnix(2025, 3, 10, 0, 0, 0, 'America/New_York')).toBe(1_741_579_200);
+    expect(zonedTimeToUnix(2025, 1, 6, 0, 0, 0, 'Europe/Paris')).toBe(1_736_118_000);
+  });
+
+  it('reports the local weekday/hour', () => {
+    expect(localWeekdayAndHour(1_736_704_800, 'UTC')).toEqual({ weekday: 0, hour: 18 });
+    expect(localWeekdayAndHour(1_736_704_800, 'Europe/Paris')).toEqual({ weekday: 0, hour: 19 });
+    expect(getLocalParts(1_736_337_600, 'UTC').weekday).toBe(3);
+  });
+
+  it('detects the Sunday 18:00 reminder window', () => {
+    expect(isReminderWindow(1_736_704_800, 'UTC')).toBe(true); // Sun 18:00
+    expect(isReminderWindow(1_736_704_740, 'UTC')).toBe(false); // Sun 17:59
+    expect(isReminderWindow(1_736_762_400, 'UTC')).toBe(false); // Mon 18:00
+  });
+
+  it('exposes a local date key', () => {
+    expect(localDateKey(1_736_337_600, 'UTC')).toBe('2025-01-08');
+    expect(localDateKey(1_736_119_800, 'Europe/Paris')).toBe('2025-01-06');
+  });
+
+  it('startOfLocalWeek is idempotent', () => {
+    const start = startOfLocalWeek(1_736_337_600, 'America/New_York');
+    expect(startOfLocalWeek(start, 'America/New_York')).toBe(start);
+  });
+});

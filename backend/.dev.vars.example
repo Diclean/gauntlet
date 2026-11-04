@@ -1,0 +1,15 @@
+# Copy to .dev.vars for local development. Never commit .dev.vars.
+# All of these are Worker secrets/vars; in production use `wrangler secret put`.
+
+APPLE_BUNDLE_ID=com.mathys.dares
+APPLE_JWKS_URL=https://appleid.apple.com/auth/keys
+
+DEEPSEEK_API_KEY=sk-replace-me
+
+# APNs token auth (ES256). Paste the .p8 contents with real newlines.
+# In a single-line shell env you may also use literal \n sequences.
+APNS_KEY_P8="-----BEGIN PRIVATE KEY-----\nMIGT...\n-----END PRIVATE KEY-----"
+APNS_KEY_ID=ABC123DEFG
+APNS_TEAM_ID=TEAM123456
+# "sandbox" for development builds signed with a development profile.
+APNS_ENV=sandbox

@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+.env
+.env.*
+*.p8
+.dev.vars
+prototype/shots/
+prototype/package-lock.json

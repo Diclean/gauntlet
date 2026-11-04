@@ -1,0 +1,15 @@
+{
+  "name": "receipts-prototype",
+  "private": true,
+  "type": "module",
+  "description": "Clickable HTML prototype of the Receipts app (design review build)",
+  "scripts": {
+    "check": "node check.mjs",
+    "check:dark": "node check.mjs --dark",
+    "sheet": "node sheet.mjs",
+    "photos": "node fetch-photos.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.49.1"
+  }
+}

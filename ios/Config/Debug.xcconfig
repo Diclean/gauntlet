@@ -1,0 +1,12 @@
+// Dares — Debug configuration.
+//
+// NOTE: `//` starts a comment inside an .xcconfig file, so the `http:/$()/` trick is used to
+// embed `//` in the URL. `$( )` expands to an empty string at build time.
+
+API_BASE_URL = http:/$()/localhost:8787
+
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DEBUG
+ONLY_ACTIVE_ARCH = YES
+ENABLE_TESTABILITY = YES
+GCC_OPTIMIZATION_LEVEL = 0
+SWIFT_OPTIMIZATION_LEVEL = -Onone
