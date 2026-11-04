@@ -1,8 +1,15 @@
-import type { SubmissionJson, SubmissionRow, WeekRow } from '../types';
+import type {
+  PublicUser,
+  ReactionJson,
+  SubmissionJson,
+  SubmissionRow,
+  WeekRow,
+} from '../types';
 import { toPublicUser } from '../types';
 import { all, first } from '../lib/db';
 import { badRequest, notFound } from '../lib/errors';
 import { base64UrlToUtf8, utf8ToBase64Url } from '../lib/crypto';
+import { loadCommentCounts, loadReactions } from './banter';
 
 /** Submission joins, serialization, vote counts and cursor pagination. */
 
@@ -25,13 +32,15 @@ interface SubmissionContextRow extends SubmissionRow {
   week_vote_deadline: number;
   week_status: 'open' | 'closed';
   week_reminder_sent: number;
+  week_number: number;
 }
 
 const CONTEXT_SELECT = `
   SELECT s.*, c.title AS challenge_title, c.points AS challenge_points,
          w.id AS week_id, w.group_id AS group_id, w.starts_at AS week_starts_at,
          w.ends_at AS week_ends_at, w.vote_deadline AS week_vote_deadline,
-         w.status AS week_status, w.reminder_sent AS week_reminder_sent
+         w.status AS week_status, w.reminder_sent AS week_reminder_sent,
+         w.number AS week_number
     FROM submissions s
     JOIN challenges c ON c.id = s.challenge_id
     JOIN weeks w ON w.id = c.week_id
@@ -70,6 +79,7 @@ export async function loadSubmissionContext(
       vote_deadline: row.week_vote_deadline,
       status: row.week_status,
       reminder_sent: row.week_reminder_sent,
+      number: row.week_number,
     },
   };
 }
@@ -93,7 +103,22 @@ const VIEW_SELECT = `
     JOIN users u ON u.id = s.user_id
 `;
 
-export function submissionToJson(row: SubmissionViewRow): SubmissionJson {
+/**
+ * The tally stays hidden until the viewer has called it: voters are exposed only
+ * when the submission is decided (accepted/rejected) or the viewer already voted.
+ * Otherwise the array is empty, even if other members have voted.
+ */
+function votersAreVisible(row: SubmissionViewRow): boolean {
+  if (row.status === 'accepted' || row.status === 'rejected') return true;
+  return row.my_vote !== null && row.my_vote !== undefined;
+}
+
+export function submissionToJson(
+  row: SubmissionViewRow,
+  voters: readonly PublicUser[] = [],
+  reactions: readonly ReactionJson[] = [],
+  commentCount = 0,
+): SubmissionJson {
   return {
     id: row.id,
     challengeId: row.challenge_id,
@@ -104,6 +129,7 @@ export function submissionToJson(row: SubmissionViewRow): SubmissionJson {
       display_name: row.display_name,
       avatar_emoji: row.avatar_emoji,
       created_at: 0,
+      terms_accepted_at: null,
     }),
     mediaUrl: `/media/${row.media_key}`,
     mediaType: row.media_type,
@@ -115,7 +141,63 @@ export function submissionToJson(row: SubmissionViewRow): SubmissionJson {
     myVote: row.my_vote === null || row.my_vote === undefined ? null : Boolean(row.my_vote),
     createdAt: row.created_at,
     decidedAt: row.decided_at,
+    voters: votersAreVisible(row) ? [...voters] : [],
+    reactions: [...reactions],
+    commentCount,
   };
+}
+
+interface SubmissionVoterRow {
+  submission_id: string;
+  id: string;
+  display_name: string;
+  avatar_emoji: string | null;
+}
+
+/**
+ * All voters for a batch of submissions, grouped by submission id, in vote
+ * order. One query per page/list keeps the feed and pending-votes paths cheap.
+ */
+async function loadSubmissionVoters(
+  db: D1Database,
+  submissionIds: readonly string[],
+): Promise<Map<string, PublicUser[]>> {
+  const ids = [...new Set(submissionIds)];
+  if (ids.length === 0) return new Map();
+
+  const bySubmission = new Map<string, PublicUser[]>();
+  // Keep each IN (...) under D1's bound-parameter limit on large pending lists.
+  const CHUNK_SIZE = 50;
+  for (let offset = 0; offset < ids.length; offset += CHUNK_SIZE) {
+    const chunk = ids.slice(offset, offset + CHUNK_SIZE);
+    const placeholders = chunk.map(() => '?').join(', ');
+    const rows = await all<SubmissionVoterRow>(
+      db
+        .prepare(
+          `SELECT v.submission_id, u.id, u.display_name, u.avatar_emoji
+             FROM votes v
+             JOIN users u ON u.id = v.voter_id
+            WHERE v.submission_id IN (${placeholders})
+            ORDER BY v.created_at ASC, u.id ASC`,
+        )
+        .bind(...chunk),
+    );
+
+    for (const row of rows) {
+      const user = toPublicUser({
+        id: row.id,
+        apple_sub: '',
+        display_name: row.display_name,
+        avatar_emoji: row.avatar_emoji,
+        created_at: 0,
+        terms_accepted_at: null,
+      });
+      const list = bySubmission.get(row.submission_id);
+      if (list) list.push(user);
+      else bySubmission.set(row.submission_id, [user]);
+    }
+  }
+  return bySubmission;
 }
 
 export async function loadSubmissionView(
@@ -126,7 +208,40 @@ export async function loadSubmissionView(
   const row = await first<SubmissionViewRow>(
     db.prepare(`${VIEW_SELECT} WHERE s.id = ?`).bind(viewerId, submissionId),
   );
-  return row ? submissionToJson(row) : null;
+  if (!row) return null;
+  const [voters, reactions, commentCounts] = await Promise.all([
+    loadSubmissionVoters(db, [row.id]),
+    loadReactions(db, [row.id], viewerId),
+    loadCommentCounts(db, [row.id], viewerId),
+  ]);
+  return submissionToJson(
+    row,
+    voters.get(row.id) ?? [],
+    reactions.get(row.id) ?? [],
+    commentCounts.get(row.id) ?? 0,
+  );
+}
+
+/** Batched enrichment for feed / pending lists. */
+async function viewsToJson(
+  db: D1Database,
+  rows: readonly SubmissionViewRow[],
+  viewerId: string,
+): Promise<SubmissionJson[]> {
+  const ids = rows.map((row) => row.id);
+  const [voters, reactions, commentCounts] = await Promise.all([
+    loadSubmissionVoters(db, ids),
+    loadReactions(db, ids, viewerId),
+    loadCommentCounts(db, ids, viewerId),
+  ]);
+  return rows.map((row) =>
+    submissionToJson(
+      row,
+      voters.get(row.id) ?? [],
+      reactions.get(row.id) ?? [],
+      commentCounts.get(row.id) ?? 0,
+    ),
+  );
 }
 
 export async function requireSubmissionView(
@@ -216,11 +331,20 @@ export async function listPendingVotes(
               SELECT 1 FROM votes v
                WHERE v.submission_id = s.id AND v.voter_id = ?
             )
+            AND NOT EXISTS (
+              SELECT 1 FROM blocks b
+               WHERE b.blocker_id = ? AND b.blocked_id = s.user_id
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM reports r
+               WHERE r.reporter_id = ? AND r.target_type = 'submission'
+                 AND r.target_id = s.id
+            )
           ORDER BY s.created_at ASC, s.id ASC`,
       )
-      .bind(viewerId, groupId, viewerId, now, viewerId),
+      .bind(viewerId, groupId, viewerId, now, viewerId, viewerId, viewerId),
   );
-  return rows.map(submissionToJson);
+  return await viewsToJson(db, rows, viewerId);
 }
 
 export async function listFeed(
@@ -229,8 +353,20 @@ export async function listFeed(
   viewerId: string,
   cursor: FeedCursor | null,
 ): Promise<FeedPage> {
-  const conditions = ['w.group_id = ?'];
-  const bindings: unknown[] = [groupId];
+  const conditions = [
+    'w.group_id = ?',
+    "(s.status <> 'removed' OR s.user_id = ?)",
+    `NOT EXISTS (
+       SELECT 1 FROM blocks b
+        WHERE b.blocker_id = ? AND b.blocked_id = s.user_id
+     )`,
+    `NOT EXISTS (
+       SELECT 1 FROM reports r
+        WHERE r.reporter_id = ? AND r.target_type = 'submission'
+          AND r.target_id = s.id
+     )`,
+  ];
+  const bindings: unknown[] = [groupId, viewerId, viewerId, viewerId];
   if (cursor) {
     conditions.push('(s.created_at < ? OR (s.created_at = ? AND s.id < ?))');
     bindings.push(cursor.createdAt, cursor.createdAt, cursor.id);
@@ -252,7 +388,7 @@ export async function listFeed(
   const page = hasMore ? rows.slice(0, FEED_LIMIT) : rows;
   const last = page[page.length - 1];
   return {
-    items: page.map(submissionToJson),
+    items: await viewsToJson(db, page, viewerId),
     nextCursor: hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.id }) : null,
   };
 }

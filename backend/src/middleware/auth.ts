@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { toPublicUser } from '../types';
 import type { AppEnv } from '../types';
-import { unauthorized } from '../lib/errors';
+import { ApiError, unauthorized } from '../lib/errors';
 import { findUserBySessionHash, hashSessionToken } from '../auth/session';
 import { nowSeconds } from '../lib/db';
 
@@ -20,5 +20,18 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   c.set('user', toPublicUser(user));
   c.set('userRow', user);
   c.set('sessionTokenHash', tokenHash);
+
+  // App Store 1.2 house-rules gate: every write except account management,
+  // terms acceptance and logout (which must always work) requires acceptance.
+  const method = c.req.method.toUpperCase();
+  const isWrite = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+  const termsExempt =
+    c.req.path === '/me' ||
+    c.req.path === '/me/accept-terms' ||
+    c.req.path === '/auth/logout';
+  if (isWrite && !termsExempt && !user.terms_accepted_at) {
+    throw new ApiError(403, 'terms_required', 'Accept the house rules to continue');
+  }
+
   await next();
 };

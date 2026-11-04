@@ -178,6 +178,7 @@ describe('week-end awards', () => {
       vote_deadline: W2_DEADLINE,
       status: 'closed',
       reminder_sent: 0,
+      number: 2,
     };
 
     await awardWeekEnd(env, group!, week2, W2_DEADLINE + 1);

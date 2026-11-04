@@ -1,20 +1,8 @@
 import type { Env } from '../types';
-import { all, chunk } from '../lib/db';
+import { all } from '../lib/db';
+import { deleteMediaKeys } from './media';
 
 /** Account deletion + group deletion, including R2 media. */
-
-async function deleteR2Keys(env: Env, keys: readonly string[]): Promise<void> {
-  for (const group of chunk([...new Set(keys)], 100)) {
-    if (group.length === 0) continue;
-    try {
-      await env.MEDIA.delete(group);
-    } catch {
-      // Media deletion is retried implicitly by the client? Never fail the
-      // account deletion on an R2 hiccup; the DB rows are still removed.
-      console.error('media_delete_failed', { count: group.length });
-    }
-  }
-}
 
 async function groupMediaKeys(db: D1Database, groupId: string): Promise<string[]> {
   const rows = await all<{ media_key: string }>(
@@ -34,7 +22,6 @@ async function groupMediaKeys(db: D1Database, groupId: string): Promise<string[]
 /** Deletes every row belonging to a group plus all of its media objects. */
 export async function deleteGroupCompletely(env: Env, groupId: string): Promise<void> {
   const mediaKeys = await groupMediaKeys(env.DB, groupId);
-  await deleteR2Keys(env, mediaKeys);
 
   await env.DB.batch([
     env.DB.prepare(
@@ -46,6 +33,49 @@ export async function deleteGroupCompletely(env: Env, groupId: string): Promise<
           WHERE w.group_id = ?
         )`,
     ).bind(groupId),
+    env.DB.prepare(
+      `DELETE FROM comments
+        WHERE submission_id IN (
+          SELECT s.id FROM submissions s
+          JOIN challenges c ON c.id = s.challenge_id
+          JOIN weeks w ON w.id = c.week_id
+          WHERE w.group_id = ?
+        )`,
+    ).bind(groupId),
+    env.DB.prepare(
+      `DELETE FROM reactions
+        WHERE submission_id IN (
+          SELECT s.id FROM submissions s
+          JOIN challenges c ON c.id = s.challenge_id
+          JOIN weeks w ON w.id = c.week_id
+          WHERE w.group_id = ?
+        )`,
+    ).bind(groupId),
+    env.DB.prepare(
+      `DELETE FROM banter_pushes
+        WHERE submission_id IN (
+          SELECT s.id FROM submissions s
+          JOIN challenges c ON c.id = s.challenge_id
+          JOIN weeks w ON w.id = c.week_id
+          WHERE w.group_id = ?
+        )`,
+    ).bind(groupId),
+    env.DB.prepare(
+      `DELETE FROM reports WHERE group_id = ?`,
+    ).bind(groupId),
+    env.DB.prepare(
+      `DELETE FROM captains
+        WHERE week_id IN (SELECT id FROM weeks WHERE group_id = ?)`,
+    ).bind(groupId),
+    env.DB.prepare(
+      `DELETE FROM vetoes
+        WHERE challenge_id IN (
+          SELECT c.id FROM challenges c
+          JOIN weeks w ON w.id = c.week_id
+          WHERE w.group_id = ?
+        )`,
+    ).bind(groupId),
+    env.DB.prepare('DELETE FROM group_bans WHERE group_id = ?').bind(groupId),
     env.DB.prepare(
       `DELETE FROM submissions
         WHERE challenge_id IN (
@@ -60,9 +90,13 @@ export async function deleteGroupCompletely(env: Env, groupId: string): Promise<
     ).bind(groupId),
     env.DB.prepare('DELETE FROM weeks WHERE group_id = ?').bind(groupId),
     env.DB.prepare('DELETE FROM point_events WHERE group_id = ?').bind(groupId),
+    env.DB.prepare('DELETE FROM monthly_awards WHERE group_id = ?').bind(groupId),
     env.DB.prepare('DELETE FROM group_members WHERE group_id = ?').bind(groupId),
     env.DB.prepare('DELETE FROM groups WHERE id = ?').bind(groupId),
   ]);
+
+  // After the rows are gone: best-effort R2 cleanup through the one helper.
+  await deleteMediaKeys(env, mediaKeys);
 }
 
 /**
@@ -96,19 +130,51 @@ export async function deleteAccount(env: Env, userId: string): Promise<void> {
   const mediaRows = await all<{ media_key: string }>(
     env.DB.prepare('SELECT media_key FROM submissions WHERE user_id = ?').bind(userId),
   );
-  await deleteR2Keys(env, mediaRows.map((row) => row.media_key));
 
   await env.DB.batch([
     env.DB.prepare(
       `DELETE FROM votes
         WHERE submission_id IN (SELECT id FROM submissions WHERE user_id = ?)`,
     ).bind(userId),
+    env.DB.prepare(
+      `DELETE FROM reports
+        WHERE reporter_id = ?
+           OR (target_type = 'submission' AND target_id IN (
+                 SELECT id FROM submissions WHERE user_id = ?))
+           OR (target_type = 'comment' AND target_id IN (
+                 SELECT id FROM comments WHERE user_id = ?))
+           OR (target_type = 'comment' AND target_id IN (
+                 SELECT id FROM comments
+                  WHERE submission_id IN (SELECT id FROM submissions WHERE user_id = ?)))`,
+    ).bind(userId, userId, userId, userId),
+    env.DB.prepare(
+      `DELETE FROM comments
+        WHERE submission_id IN (SELECT id FROM submissions WHERE user_id = ?)`,
+    ).bind(userId),
+    env.DB.prepare('DELETE FROM comments WHERE user_id = ?').bind(userId),
+    env.DB.prepare(
+      `DELETE FROM reactions
+        WHERE submission_id IN (SELECT id FROM submissions WHERE user_id = ?)`,
+    ).bind(userId),
+    env.DB.prepare('DELETE FROM reactions WHERE user_id = ?').bind(userId),
+    env.DB.prepare(
+      `DELETE FROM banter_pushes
+        WHERE submission_id IN (SELECT id FROM submissions WHERE user_id = ?)`,
+    ).bind(userId),
+    env.DB.prepare('DELETE FROM blocks WHERE blocker_id = ? OR blocked_id = ?').bind(userId, userId),
+    env.DB.prepare('DELETE FROM group_bans WHERE user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM captains WHERE user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM vetoes WHERE user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM notification_prefs WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM votes WHERE voter_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM submissions WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM point_events WHERE user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM monthly_awards WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM group_members WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM devices WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
   ]);
+
+  await deleteMediaKeys(env, mediaRows.map((row) => row.media_key));
 }

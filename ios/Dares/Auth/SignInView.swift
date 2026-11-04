@@ -1,89 +1,84 @@
 import AuthenticationServices
 import SwiftUI
 
+/// The sign in: the crest, the name of the app and the Apple button.
 struct SignInView: View {
     @Environment(AppState.self) private var appState
     @State private var isWorking = false
 
     var body: some View {
-        VStack(spacing: 28) {
-            Spacer(minLength: 24)
+        ZStack {
+            Color.ink.ignoresSafeArea()
 
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.accentColor, Color.accentColor.opacity(0.55)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 96, height: 96)
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.white)
-            }
-            .accessibilityHidden(true)
+            VStack(spacing: 22) {
+                Spacer(minLength: 24)
 
-            VStack(spacing: 10) {
-                Text("signin.title")
-                    .font(.largeTitle.bold())
-                    .multilineTextAlignment(.center)
-                Text("signin.subtitle")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
+                ClubCrest(initials: AppConfig.clubInitials, size: 76)
 
-            AppleSignInButton { result in
-                switch result {
-                case let .success(appleResult):
-                    isWorking = true
-                    Task {
-                        await appState.signIn(with: appleResult)
-                        isWorking = false
+                VStack(spacing: 8) {
+                    Text(AppConfig.appName)
+                        .displayStyle(46)
+                        .foregroundStyle(Color.paper)
+                    Text("Your friends are the club. Every week is a matchweek. Every proof is a VAR call.")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.paper.opacity(0.65))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                }
+
+                AppleSignInButton { result in
+                    switch result {
+                    case let .success(appleResult):
+                        isWorking = true
+                        Task {
+                            await appState.signIn(with: appleResult)
+                            isWorking = false
+                        }
+                    case let .failure(error):
+                        if (error as? ASAuthorizationError)?.code == .canceled { return }
+                        appState.errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                     }
-                case let .failure(error):
-                    if (error as? ASAuthorizationError)?.code == .canceled { return }
-                    appState.errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 }
-            }
-            .frame(maxWidth: 420)
-            .opacity(isWorking ? 0.6 : 1)
-            .disabled(isWorking)
-
-            if isWorking {
-                ProgressView()
-            }
-
-            VStack(spacing: 8) {
-                Button {
-                    Task { await appState.enterDemoMode() }
-                } label: {
-                    Label("demo.try", systemImage: "play.circle")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                .frame(maxWidth: 420)
+                .opacity(isWorking ? 0.6 : 1)
                 .disabled(isWorking)
 
-                Text("demo.try.hint")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                if isWorking {
+                    ProgressView()
+                        .tint(Color.card)
+                }
+
+                if appState.canRetrySession {
+                    // The session is still there: only the server was unreachable.
+                    BrutalOutlineButton(title: "Try again") {
+                        Task { await appState.retrySession() }
+                    }
+                    .disabled(isWorking)
+                }
+
+                VStack(spacing: 10) {
+                    BrutalButton(title: "Try the demo", trailing: "→") {
+                        Task { await appState.enterDemoMode() }
+                    }
+                    .disabled(isWorking)
+
+                    Text("The demo runs offline with a full club, a title race and an awards night.")
+                        .labelStyle(8)
+                        .foregroundStyle(Color.paper.opacity(0.5))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: 420)
+
+                Spacer(minLength: 12)
+
+                Text("By continuing you accept the rules of the club.")
+                    .labelStyle(8)
+                    .foregroundStyle(Color.paper.opacity(0.4))
                     .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
             }
-            .frame(maxWidth: 420)
-
-            Spacer(minLength: 12)
-
-            Text("signin.legal")
-                .font(.footnote)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+            .padding(.horizontal, 24)
         }
-        .padding(.horizontal, 24)
-        .background(Color(uiColor: .systemGroupedBackground))
     }
 }
 

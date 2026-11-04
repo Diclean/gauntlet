@@ -240,23 +240,22 @@ final class DemoAPIClientTests: XCTestCase {
         XCTAssertEqual(secondEntry?.points, challenge.points)
     }
 
-    func testTheLedgerHoldsWeeklyWinnerAndStreakPoints() async throws {
+    func testTheLedgerHoldsFixtureFirstBonusAndStreakPoints() async throws {
         let client = makeClient()
-        let events = await client.pointEvents(groupID: DemoSeed.warriorsID)
+        let events = await client.pointEvents(groupID: DemoSeed.sundayLeagueID)
 
         XCTAssertTrue(events.contains { $0.kind == .challenge })
         XCTAssertTrue(events.contains { $0.kind == .firstBonus })
-        XCTAssertTrue(events.contains { $0.kind == .weeklyWinner })
         XCTAssertTrue(events.contains { $0.kind == .streak })
         XCTAssertTrue(events.allSatisfy { $0.points > 0 })
     }
 
     func testTheAllTimeLeaderboardIsTheSumOfEveryWeek() async throws {
         let client = makeClient()
-        let currentWeek = try await client.currentWeek(groupID: DemoSeed.warriorsID)
-        let week = try await client.leaderboard(groupID: DemoSeed.warriorsID, scope: .week)
-        let all = try await client.leaderboard(groupID: DemoSeed.warriorsID, scope: .all)
-        let events = await client.pointEvents(groupID: DemoSeed.warriorsID)
+        let currentWeek = try await client.currentWeek(groupID: DemoSeed.sundayLeagueID)
+        let week = try await client.leaderboard(groupID: DemoSeed.sundayLeagueID, scope: .week)
+        let all = try await client.leaderboard(groupID: DemoSeed.sundayLeagueID, scope: .all)
+        let events = await client.pointEvents(groupID: DemoSeed.sundayLeagueID)
 
         let weekTotal = events
             .filter { $0.weekID == currentWeek.week.id }
@@ -273,9 +272,9 @@ final class DemoAPIClientTests: XCTestCase {
 
     func testPendingVotesExcludeMyOwnProofsAndTheOnesIAlreadyVotedOn() async throws {
         let client = makeClient()
-        let pending = try await client.pendingVotes(groupID: DemoSeed.warriorsID)
+        let pending = try await client.pendingVotes(groupID: DemoSeed.sundayLeagueID)
 
-        XCTAssertEqual(pending.items.count, 6, "The demo seeds six proofs that wait for a vote.")
+        XCTAssertEqual(pending.items.count, 5, "The demo seeds five proofs that wait for a call.")
         XCTAssertTrue(pending.items.allSatisfy { $0.user.id != DemoSeed.currentUserID })
         XCTAssertTrue(pending.items.allSatisfy { $0.myVote == nil })
         XCTAssertTrue(pending.items.allSatisfy { $0.status == .pending })
@@ -288,15 +287,15 @@ final class DemoAPIClientTests: XCTestCase {
         let voted = try await client.vote(submissionID: target.id, approve: true)
         XCTAssertNotNil(voted.submission.myVote)
 
-        let after = try await client.pendingVotes(groupID: DemoSeed.warriorsID)
-        XCTAssertEqual(after.items.count, 5)
+        let after = try await client.pendingVotes(groupID: DemoSeed.sundayLeagueID)
+        XCTAssertEqual(after.items.count, 4)
         XCTAssertFalse(after.items.contains { $0.id == target.id })
     }
 
     func testMyPendingProofIsNotInThePendingVotes() async throws {
         let client = makeClient()
-        let pending = try await client.pendingVotes(groupID: DemoSeed.warriorsID)
-        let feed = try await client.feed(groupID: DemoSeed.warriorsID, cursor: nil)
+        let pending = try await client.pendingVotes(groupID: DemoSeed.sundayLeagueID)
+        let feed = try await client.feed(groupID: DemoSeed.sundayLeagueID, cursor: nil)
 
         let mineInFeed = feed.items.filter { $0.user.id == DemoSeed.currentUserID && $0.status == .pending }
         XCTAssertFalse(mineInFeed.isEmpty, "The demo seeds a proof of mine that waits for votes.")
@@ -309,7 +308,7 @@ final class DemoAPIClientTests: XCTestCase {
 
     func testTheDemoPlaysTheOtherMembersOnMyOwnProof() async throws {
         let client = makeClient()
-        let week = try await client.currentWeek(groupID: DemoSeed.warriorsID)
+        let week = try await client.currentWeek(groupID: DemoSeed.rooftopID)
         let challenge = try XCTUnwrap(week.challenges.first { $0.myStatus == .todo })
 
         let mine = try await client.createSubmission(
@@ -325,26 +324,26 @@ final class DemoAPIClientTests: XCTestCase {
         let decided = try await client.submission(id: mine.id)
         XCTAssertEqual(decided.submission.status, .accepted)
 
-        let events = await client.pointEvents(groupID: DemoSeed.warriorsID)
+        let events = await client.pointEvents(groupID: DemoSeed.rooftopID)
         let mineEvents = events.filter { $0.userID == DemoSeed.currentUserID }
         XCTAssertTrue(mineEvents.contains { $0.kind == .challenge })
     }
 
     // MARK: - Groups, profile and account
 
-    func testTheDemoSeedsTwoGroupsFiveMembersAndFiveChallenges() async throws {
+    func testTheDemoSeedsThreeClubsFiveMembersAndFiveFixtures() async throws {
         let client = makeClient()
         let groups = try await client.groups()
-        XCTAssertEqual(groups.groups.count, 2)
+        XCTAssertEqual(groups.groups.count, 3)
 
-        let detail = try await client.groupDetail(id: DemoSeed.warriorsID)
+        let detail = try await client.groupDetail(id: DemoSeed.sundayLeagueID)
         XCTAssertEqual(detail.members.count, 5)
         XCTAssertTrue(detail.members.allSatisfy { $0.user.avatarEmoji?.isEmpty == false })
 
-        let week = try await client.currentWeek(groupID: DemoSeed.warriorsID)
+        let week = try await client.currentWeek(groupID: DemoSeed.sundayLeagueID)
         XCTAssertEqual(week.challenges.count, 5)
         XCTAssertEqual(week.week.status, .open)
-        XCTAssertEqual(Set(week.challenges.map(\.myStatus)), [.todo, .pending, .accepted, .rejected])
+        XCTAssertEqual(Set(week.challenges.map(\.myStatus)), [.pending, .accepted, .rejected])
     }
 
     func testCreateJoinAndLeaveAGroup() async throws {
@@ -362,9 +361,9 @@ final class DemoAPIClientTests: XCTestCase {
 
         // Join the group of somebody else with its invite code.
         let joined = try await client.joinGroup(
-            JoinGroupRequest(inviteCode: "PL4XZ9")
+            JoinGroupRequest(inviteCode: "TRN4XP")
         ).group
-        XCTAssertEqual(joined.id, DemoSeed.sundayID)
+        XCTAssertEqual(joined.id, DemoSeed.trainingID)
         XCTAssertEqual(joined.memberCount, 4)
 
         // Leave it again.
@@ -437,7 +436,7 @@ final class DemoAPIClientTests: XCTestCase {
         XCTAssertGreaterThan(data.count, 0)
 
         let client = makeClient()
-        let pending = try await client.pendingVotes(groupID: DemoSeed.warriorsID)
+        let pending = try await client.pendingVotes(groupID: DemoSeed.sundayLeagueID)
         let withMedia = try XCTUnwrap(pending.items.first)
         let media = try await client.mediaData(for: withMedia.mediaUrl)
         XCTAssertGreaterThan(media.count, 0)
@@ -445,7 +444,7 @@ final class DemoAPIClientTests: XCTestCase {
 
     func testTheVideoProofIsBundled() async throws {
         let client = makeClient()
-        let pending = try await client.pendingVotes(groupID: DemoSeed.warriorsID)
+        let pending = try await client.pendingVotes(groupID: DemoSeed.sundayLeagueID)
         let video = try XCTUnwrap(pending.items.first { $0.mediaType == .video })
         let data = try await client.mediaData(for: video.mediaUrl)
         XCTAssertGreaterThan(data.count, 0)

@@ -121,6 +121,7 @@ Add sensible indexes. Timestamps are Unix **seconds**. IDs are `crypto.randomUUI
 |---|---|---|---|
 | GET | `/health` | | `{ok:true}` |
 | POST | `/auth/apple` | `{identityToken, nonce, displayName?}` | `{token, user}` |
+| POST | `/auth/logout` | auth required; deletes the presented session | `{ok:true}` |
 | GET | `/me` | | `{user}` |
 | PATCH | `/me` | `{displayName?, avatarEmoji?}` | `{user}` |
 | DELETE | `/me` | deletes account + their media (App Store requirement) | `{ok:true}` |
@@ -149,8 +150,12 @@ Week        {id, startsAt, endsAt, voteDeadline, status}
 ChallengeWithMyStatus {id, title, description, difficulty, points, position,
                        myStatus: 'todo'|'pending'|'accepted'|'rejected', acceptedCount}
 Submission  {id, challengeId, challengeTitle, user, mediaUrl, mediaType, caption, status,
-             approvals, rejections, eligibleVoters, myVote: boolean|null, createdAt, decidedAt}
+             approvals, rejections, eligibleVoters, myVote: boolean|null, createdAt, decidedAt,
+             voters:[User]}
 ```
+`voters` lists the members that voted on the proof, in vote order. It stays `[]` while the
+tally is hidden — i.e. until the submission is decided (`accepted`/`rejected`) or the caller has
+already voted on it — and is populated for decided proofs and for voters.
 `mediaUrl` is the relative path `/media/<key>`; the client prefixes the base URL and sends the bearer token.
 Errors: `{error: {code, message}}` with the proper HTTP status.
 
@@ -221,3 +226,115 @@ ios/Dares/Groups/ ...   Challenges/ ... Voting/ ... Feed/ ... Leaderboard/ ... C
 ios/Dares/Resources/    Assets.xcassets, Localizable.xcstrings, Dares.entitlements, Info.plist
 ios/DaresTests/         decoding tests for every API model against sample JSON from this spec
 ```
+
+---
+
+## 5. v2 additions — Sunday League (approved 2026-11-04)
+
+Visual + vocabulary: see DESIGN.md (v2) and design/screens.html. App display name: **Gauntlet**.
+
+### Club forfeit
+- `groups.forfeit TEXT` (≤ 60 chars, default `"Buys the round 🍺"`), editable by the owner (`PATCH /groups/:id {forfeit}`), returned in `Group.forfeit`.
+  Display only (shown on the relegation line, the receipt and the Wooden Spoon award); never enforced.
+
+### Matchweek numbers
+- `Week.number` = 1-based index of the week since the group was created (first generated week = 1). Add to the `Week` shape.
+
+### Title race (points curves)
+`GET /groups/:id/stats/race` → cumulative points per member per closed+current week, season = since group creation.
+```
+{ weeks:[{id, number, startsAt}],
+  series:[{user, cumulative:[int], perWeek:[int]}],   // arrays aligned with weeks
+  me:{bestWeek:{number, points}, avgPerWeek:int, streak:int} }
+```
+Members who joined later get 0 for earlier weeks. Built from `point_events` only.
+
+### Full-time receipt (weekly recap)
+`GET /groups/:id/weeks/:weekId/receipt` (members only; current or past week) →
+```
+{ week:{id, number, startsAt, endsAt}, club:{name, forfeit},
+  player:{user, rank, rankDelta, total},
+  lines:[{label, points, struck:boolean}],   // one per challenge I submitted (accepted → points; rejected → 0, struck, label suffixed " · VAR: NO GOAL"), then bonuses (first_bonus, streak, weekly_winner)
+  manOfTheMatch:User|null, woodenSpoon:User|null }
+```
+`GET /groups/:id/weeks?limit=10` → `{weeks:[Week]}` closed weeks, newest first, so the app can open older receipts.
+
+### Monthly awards ("Awards night")
+- Computed by the hourly cron on the **first Monday of each month at 19:00 group-local time** ("Awards night") for the previous calendar month: all weeks whose `starts_at` falls in that month (group tz). By then every such week is closed and past its vote deadline (the last week starting in month M always ends by the Sunday before the first Monday of M+1, deadline Monday 12:00); still assert `vote_deadline <= now` for each and skip the run (retry next hour) otherwise. Idempotent (`UNIQUE(group_id, month, award)`). Skip months with no closed weeks. Push "🏆 <Month> Awards is live" to members.
+- Awards (ties → all tied members win; a member with 0 relevant activity can't win, except Wooden Spoon):
+  | key | rule | bonus |
+  |---|---|---|
+  | `player_of_the_month` | most points in the month | **+50** (point_events kind `monthly_award`, week_id = last week of that month) |
+  | `golden_boot` | most accepted submissions | 0 |
+  | `toughest_ref` | most `approve=0` votes cast | 0 |
+  | `comeback_kid` | biggest climb in all-time rank between start and end of month (min ▲1) | 0 |
+  | `first_to_score` | most first_bonus events | 0 |
+  | `wooden_spoon` | fewest points in the month (members present all month) | 0 |
+- Table `monthly_awards(id, group_id, month TEXT 'YYYY-MM', award TEXT, user_id, value INTEGER, created_at)`; `point_events.kind` gains `'monthly_award'` (SQLite: rebuild the table in migration 0002 to widen the CHECK).
+- `GET /groups/:id/awards?month=YYYY-MM` (default latest) →
+  `{ month, awards:[{award, winners:[User], value, nominees:[{user, value}], stats?}] }` (nominees = top 3 by that metric; awards returned in ceremony order)
+  `stats` is present only on `player_of_the_month`: `{points, goals, redCards, firstToScore, bestWeek}`
+  for that month (goals = accepted submissions, redCards = rejected submissions, firstToScore = `first_bonus`
+  events, bestWeek = max points in a single week of the month). Every other award omits `stats`.
+  Ceremony order: `wooden_spoon, comeback_kid, toughest_ref, first_to_score, golden_boot, player_of_the_month`.
+- `GET /groups/:id/awards/months` → `{months:['YYYY-MM']}` newest first.
+- `GET /me/trophies` → `{trophies:[{groupId, groupName, month, award, value}]}` (trophy cabinet).
+
+### AI challenge tone
+DeepSeek prompt: challenges are "fixtures" for a Sunday-league-style friend club: fun, social, provable on camera, a few football-flavoured (e.g. "Score a Panenka", "Ref a kids' match") but most doable by non-footballers; safe, legal, consensual, non-humiliating. Fallback pool updated in the same tone.
+
+---
+
+## 6. v3 features — safety, banter, captain, house fixture (approved 2026-11-04)
+
+All new tables in migration `0004_v3.sql`. All endpoints: auth + club membership checks, zod strict bodies, bound params, rate limits on every write.
+Shape additions are additive (existing clients keep working).
+
+### 6.1 House rules (App Store 1.2)
+- `users.terms_accepted_at INTEGER NULL`; `POST /me/accept-terms` → `{user}`. `User` (for /me only) gains `termsAccepted: boolean`.
+  Every write endpoint except `/auth/apple`, `/me` (GET/PATCH/DELETE) and `/me/accept-terms` returns `403 {error:{code:"terms_required"}}` until accepted.
+
+### 6.2 Report, block, delete, remove
+- `DELETE /submissions/:id` — submitter only, any status. Deletes the R2 object, votes, reactions, comments and the submission's point_events (challenge, first_bonus, captain). The first-finisher bonus is NOT reassigned. → `{ok:true}`
+- `POST /submissions/:id/report` and `POST /comments/:id/report` — `{reason:'nudity'|'violence'|'harassment'|'dangerous'|'spam'|'other', note?:string≤200}`. One report per (reporter, target); reporting your own content → 400.
+  The target is immediately hidden **for the reporter**. When distinct reporters ≥ `max(2, ceil(memberCount/3))` the target becomes `removed` (submission status `'removed'`; comment deleted) and is hidden for everyone; a removed submission's point_events are deleted. The club owner gets a push "A proof was removed after reports". Table `reports(id, reporter_id, target_type, target_id, group_id, reason, note, created_at, UNIQUE(reporter_id,target_type,target_id))`.
+- Blocking: `POST /users/:id/block`, `DELETE /users/:id/block`, `GET /me/blocks` → `{users:[User]}`. Table `blocks(blocker_id, blocked_id, created_at, PK(blocker_id, blocked_id))`.
+  For the blocker, the blocked user's submissions and comments are excluded from feed, `votes/pending`, comments and push notifications. Voting thresholds (`eligible_voters`) are unchanged. Blocking is one-way and silent.
+- Owner removes a member: `POST /groups/:id/members/:userId/remove` (owner only, not self) → member deleted from the club, their pending submissions → `expired`, a row in `group_bans(group_id, user_id, created_at, PK)` so `POST /groups/join` with that club's code returns `403 banned`. `DELETE /groups/:id/members/:userId/ban` (owner) lifts it.
+- `Submission.status` gains `'removed'` (never returned to clients except to the submitter, who sees it as removed).
+
+### 6.3 Veto a fixture
+- `POST /challenges/:id/veto` (toggle; current open week only; one per member). When vetoes ≥ `ceil(memberCount/2)` the fixture is **replaced** in place: a new challenge (DeepSeek, same difficulty, same position, fallback pool on failure) replaces it, the old challenge gets `vetoed_at`, its submissions → `expired` with their point_events removed. Max **2 replacements per club per week**; after that veto returns `409 veto_limit`.
+  Response `{challenge:ChallengeWithMyStatus, replaced:boolean}`. Push "Fixture 03 was vetoed — new fixture is up".
+- `ChallengeWithMyStatus` gains `vetoCount`, `vetoThreshold`, `myVeto:boolean`, `isNew:boolean` (replacement created < 24h ago), `isHouse:boolean`, `createdBy:User|null`, `isCaptain:boolean`.
+  Table `vetoes(challenge_id, user_id, created_at, PK)`; `challenges` gains `vetoed_at`, `replaced_by`, `is_house`, `created_by`, `created_at`. Vetoed challenges are not returned by `/week`.
+
+### 6.4 Notification preferences
+- `GET /me/notification-prefs` / `PATCH /me/notification-prefs` → `{newWeek, voteNeeded, result, deadline, awards, banter}` booleans, default all true. Table `notification_prefs(user_id PK, …)`. Every push send checks the recipient's pref (banter = reactions + comments + house fixture announcements).
+
+### 6.5 Reactions & comments ("banter")
+- `POST /submissions/:id/reactions` `{emoji}` toggles my reaction; emoji ∈ `🔥 😂 🤡 🐐 😮 👏` (anything else → 400). One row per (user, submission, emoji). Table `reactions`.
+- `Submission` gains `reactions:[{emoji, count, mine}]` (only the 6 allowed, zero-count omitted, fixed order above) and `commentCount`.
+- `GET /submissions/:id/comments` → `{comments:[{id, user, text, createdAt, canDelete}]}` oldest first; `POST /submissions/:id/comments` `{text: 1–280 chars, trimmed}` → `{comment}`; `DELETE /comments/:id` (author or club owner). Table `comments(id, submission_id, user_id, text, created_at)`.
+- Reactions/comments only on submissions of the requester's club that are not removed/hidden for them. Push to the submitter (banter pref), batched: at most one "banter" push per submission per 10 minutes.
+
+### 6.6 Captain armband (×2)
+- `PUT /groups/:id/week/captain` `{challengeId}` — choose one fixture of the current open week as my captain fixture. Can be changed until I have a submission (any status except rejected/expired) on the current captain fixture; then `409 captain_locked`. Table `captains(week_id, user_id, challenge_id, PK(week_id,user_id))`.
+- When my submission on my captain fixture is accepted: extra point_event kind `'captain'` with points = the fixture's base points (first-finisher bonus is not doubled). Widen `point_events.kind` CHECK (table rebuild as in 0002).
+- `Week` gains `myCaptainChallengeId: string|null`. Receipt line `"CAPTAIN ×2"` with the extra points. Race/awards totals include captain points automatically (ledger).
+
+### 6.7 House fixture
+- One extra member-written fixture per club per week. Allowed author: the previous week's Man of the Match (any tied winner, first come); in a club's first week, the owner. Window: until **Wednesday 23:59 group-local** of the current week.
+- `POST /groups/:id/week/house-fixture` `{title 3–80, description ≤300, difficulty}` → `{challenge}`; position = last+1; `is_house=1`, `created_by`. Second attempt in the same week → `409 house_fixture_taken`. Vetoable like any fixture (a vetoed house fixture is NOT replaced). Push (banter) "Alex added a house fixture".
+- `GET /groups/:id/week` gains `houseFixture:{allowed:boolean, deadline:number, author:User|null}`.
+
+### 6.8 Invite link
+- `GET /join/:code` → small HTML page (no JS required, CSP `default-src 'none'; style-src 'unsafe-inline'`) with the club name + member count, an "Open in Gauntlet" link `gauntlet://join/<code>` and a TestFlight placeholder link (env `TESTFLIGHT_URL`). Unknown code → generic 404 page (no enumeration difference in timing/content beyond 404). Rate limited per IP.
+- `GET /.well-known/apple-app-site-association` → `{"applinks":{"details":[{"appIDs":["<APPLE_TEAM_ID>.com.mathys.dares"],"components":[{"/":"/join/*"}]}]}}` with `Content-Type: application/json` (env `APPLE_TEAM_ID`).
+- `Group` gains `inviteUrl` (`<PUBLIC_BASE_URL>/join/<code>`, env `PUBLIC_BASE_URL`).
+- iOS: associated domain `applinks:<API host>` + URL scheme `gauntlet`; both open a **join confirmation** screen (club name, members, "JOIN THE CLUB") — never auto-join.
+
+### 6.9 Contract additions (2026-11-04, after v3 review)
+- `GET /groups/preview/:code` (auth, terms not required, rate-limited with the same user+IP buckets as join) → `{group: Group}` using the normal Group JSON (no member list needed; `memberCount` included). Unknown or banned code → 404. Used by the iOS join confirmation screen. `GET /join/:code` stays HTML-only.
+- `GET /groups/:id/bans` (owner only) → `{users:[User & {bannedAt:number}]}`.
+- `Week.vetoesUsed: int` — replacements already used this week by the club (0–2).

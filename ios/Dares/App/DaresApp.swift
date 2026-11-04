@@ -16,6 +16,12 @@ struct DaresApp: App {
                     }
                     await state.bootstrap()
                 }
+                .onOpenURL { url in
+                    // `gauntlet://join/<code>` and `https://<host>/join/<code>` both
+                    // open the join confirmation — the club is never joined on its own.
+                    guard let code = InviteLink.code(from: url) else { return }
+                    appState.router.pendingInviteCode = code
+                }
         }
     }
 }

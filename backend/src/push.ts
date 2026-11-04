@@ -1,6 +1,7 @@
 import type { Env } from './types';
 import { all, chunk, placeholders } from './lib/db';
 import { base64ToBytes, bytesToBase64Url } from './lib/crypto';
+import { isBlocked } from './services/moderation';
 
 /**
  * APNs push (best effort). All failures are swallowed: push must never fail a
@@ -22,6 +23,24 @@ export interface PushMessage {
   groupId: string;
   submissionId?: string;
 }
+
+/** Notification-preference category checked before every send. */
+export type PushCategory =
+  | 'newWeek'
+  | 'voteNeeded'
+  | 'result'
+  | 'deadline'
+  | 'awards'
+  | 'banter';
+
+const PREF_COLUMN: Record<PushCategory, string> = {
+  newWeek: 'new_week',
+  voteNeeded: 'vote_needed',
+  result: 'result',
+  deadline: 'deadline',
+  awards: 'awards',
+  banter: 'banter',
+};
 
 interface ApnsResult {
   status: number;
@@ -133,6 +152,57 @@ async function deleteTokens(env: Env, tokens: readonly string[]): Promise<void> 
   }
 }
 
+/**
+ * Drops recipients who muted this category. A missing pref row means every
+ * category stays on. `category` is a code constant, never user input.
+ */
+export async function filterRecipientsByPrefs(
+  db: D1Database,
+  userIds: readonly string[],
+  category: PushCategory | undefined,
+): Promise<string[]> {
+  const unique = [...new Set(userIds)];
+  if (!category || unique.length === 0) return unique;
+
+  const column = PREF_COLUMN[category];
+  const muted = new Set<string>();
+  for (const group of chunk(unique, 50)) {
+    const rows = await all<{ user_id: string }>(
+      db
+        .prepare(
+          `SELECT user_id FROM notification_prefs
+            WHERE user_id IN (${placeholders(group.length)}) AND ${column} = 0`,
+        )
+        .bind(...group),
+    );
+    for (const row of rows) muted.add(row.user_id);
+  }
+  return unique.filter((userId) => !muted.has(userId));
+}
+
+/** Recipients that have not blocked `actorId` (silent, one-way blocks). */
+export async function excludeUsersBlockingActor(
+  db: D1Database,
+  actorId: string,
+  userIds: readonly string[],
+): Promise<string[]> {
+  const unique = [...new Set(userIds)].filter((id) => id !== actorId);
+  if (unique.length === 0) return [];
+  const blocked = new Set<string>();
+  for (const group of chunk(unique, 50)) {
+    const rows = await all<{ blocker_id: string }>(
+      db
+        .prepare(
+          `SELECT blocker_id FROM blocks
+            WHERE blocked_id = ? AND blocker_id IN (${placeholders(group.length)})`,
+        )
+        .bind(actorId, ...group),
+    );
+    for (const row of rows) blocked.add(row.blocker_id);
+  }
+  return unique.filter((userId) => !blocked.has(userId));
+}
+
 async function tokensForUsers(env: Env, userIds: readonly string[]): Promise<string[]> {
   const tokens: string[] = [];
   for (const group of chunk([...new Set(userIds)], 50)) {
@@ -150,6 +220,7 @@ export async function sendPushToUsers(
   env: Env,
   userIds: readonly string[],
   message: PushMessage,
+  category?: PushCategory,
 ): Promise<void> {
   if (userIds.length === 0) return;
   if (!env.APNS_KEY_P8 || !env.APNS_KEY_ID || !env.APNS_TEAM_ID) {
@@ -158,9 +229,11 @@ export async function sendPushToUsers(
   }
 
   try {
+    const recipients = await filterRecipientsByPrefs(env.DB, userIds, category);
+    if (recipients.length === 0) return;
     const jwt = await apnsJwt(env);
     if (!jwt) return;
-    const tokens = await tokensForUsers(env, userIds);
+    const tokens = await tokensForUsers(env, recipients);
     if (tokens.length === 0) return;
 
     const gone: string[] = [];
@@ -196,11 +269,16 @@ export async function pushNewWeek(
   challengeCount: number,
 ): Promise<void> {
   const members = await groupMemberIds(env, groupId);
-  await sendPushToUsers(env, members, {
-    title: 'A new week of dares is live',
-    body: `${challengeCount} new dares are waiting for you.`,
-    groupId,
-  });
+  await sendPushToUsers(
+    env,
+    members,
+    {
+      title: 'A new week of dares is live',
+      body: `${challengeCount} new dares are waiting for you.`,
+      groupId,
+    },
+    'newWeek',
+  );
 }
 
 export async function pushNewSubmission(
@@ -211,12 +289,18 @@ export async function pushNewSubmission(
   submissionId: string,
 ): Promise<void> {
   const members = await groupMemberIds(env, groupId, submitterId);
-  await sendPushToUsers(env, members, {
-    title: 'New proof to vote on',
-    body: `“${challengeTitle}” needs your vote.`,
-    groupId,
-    submissionId,
-  });
+  const recipients = await excludeUsersBlockingActor(env.DB, submitterId, members);
+  await sendPushToUsers(
+    env,
+    recipients,
+    {
+      title: 'New proof to vote on',
+      body: `“${challengeTitle}” needs your vote.`,
+      groupId,
+      submissionId,
+    },
+    'voteNeeded',
+  );
 }
 
 export async function pushDecision(
@@ -227,14 +311,19 @@ export async function pushDecision(
   accepted: boolean,
   points: number,
 ): Promise<void> {
-  await sendPushToUsers(env, [submitterId], {
-    title: accepted ? 'Dare accepted!' : 'Dare rejected',
-    body: accepted
-      ? `Nice work — you earned ${points} points.`
-      : 'The group did not accept this proof. You can try again while the week is open.',
-    groupId,
-    submissionId,
-  });
+  await sendPushToUsers(
+    env,
+    [submitterId],
+    {
+      title: accepted ? 'Dare accepted!' : 'Dare rejected',
+      body: accepted
+        ? `Nice work — you earned ${points} points.`
+        : 'The group did not accept this proof. You can try again while the week is open.',
+      groupId,
+      submissionId,
+    },
+    'result',
+  );
 }
 
 export async function pushDeadlineReminder(
@@ -244,12 +333,147 @@ export async function pushDeadlineReminder(
 ): Promise<void> {
   for (const member of membersWithChallengesLeft) {
     if (member.count <= 0) continue;
-    await sendPushToUsers(env, [member.userId], {
-      title: 'Dare deadline tonight',
-      body: `${member.count} challenge${member.count === 1 ? '' : 's'} left this week.`,
-      groupId,
-    });
+    await sendPushToUsers(
+      env,
+      [member.userId],
+      {
+        title: 'Dare deadline tonight',
+        body: `${member.count} challenge${member.count === 1 ? '' : 's'} left this week.`,
+        groupId,
+      },
+      'deadline',
+    );
   }
+}
+
+/** Monthly "Awards night" announcement (best effort, never fails cron). */
+export async function pushAwardsLive(
+  env: Env,
+  groupId: string,
+  monthName: string,
+): Promise<void> {
+  const members = await groupMemberIds(env, groupId);
+  await sendPushToUsers(
+    env,
+    members,
+    {
+      title: `🏆 ${monthName} Awards is live`,
+      body: 'Open the awards night to see who took home the silverware.',
+      groupId,
+    },
+    'awards',
+  );
+}
+
+/**
+ * At most one "banter" push per submission per 10 minutes. The conditional
+ * upsert is atomic, so concurrent reactions/comments cannot both win.
+ */
+export async function claimBanterPush(
+  db: D1Database,
+  submissionId: string,
+  now: number,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `INSERT INTO banter_pushes (submission_id, last_sent_at) VALUES (?, ?)
+       ON CONFLICT(submission_id) DO UPDATE SET last_sent_at = excluded.last_sent_at
+        WHERE banter_pushes.last_sent_at <= ?`,
+    )
+    .bind(submissionId, now, now - 10 * 60)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+/**
+ * Banter push to the proof's submitter (reaction / comment). Respects the
+ * banter pref, one-way blocks, self-actions and the 10-minute throttle.
+ */
+export async function pushBanter(
+  env: Env,
+  params: {
+    groupId: string;
+    submissionId: string;
+    recipientId: string;
+    actorId: string;
+    title: string;
+    body: string;
+  },
+): Promise<void> {
+  if (params.recipientId === params.actorId) return;
+  if (await isBlocked(env.DB, params.recipientId, params.actorId)) return;
+  if (!(await claimBanterPush(env.DB, params.submissionId, Math.floor(Date.now() / 1000)))) {
+    return;
+  }
+  await sendPushToUsers(
+    env,
+    [params.recipientId],
+    {
+      title: params.title,
+      body: params.body,
+      groupId: params.groupId,
+      submissionId: params.submissionId,
+    },
+    'banter',
+  );
+}
+
+/** "Alex added a house fixture" (banter pref, blocked authors filtered out). */
+export async function pushHouseFixture(
+  env: Env,
+  groupId: string,
+  authorId: string,
+  authorName: string,
+): Promise<void> {
+  const members = await groupMemberIds(env, groupId, authorId);
+  const recipients = await excludeUsersBlockingActor(env.DB, authorId, members);
+  await sendPushToUsers(
+    env,
+    recipients,
+    {
+      title: 'House fixture added',
+      body: `${authorName} added a house fixture.`,
+      groupId,
+    },
+    'banter',
+  );
+}
+
+/** "Fixture 03 was vetoed — new fixture is up" (banter pref). */
+export async function pushFixtureVetoed(
+  env: Env,
+  groupId: string,
+  position: number,
+): Promise<void> {
+  const members = await groupMemberIds(env, groupId);
+  const label = String(position + 1).padStart(2, '0');
+  await sendPushToUsers(
+    env,
+    members,
+    {
+      title: 'Fixture vetoed',
+      body: `Fixture ${label} was vetoed — new fixture is up.`,
+      groupId,
+    },
+    'banter',
+  );
+}
+
+/** Safety notice to the club owner when reported content is removed. */
+export async function pushContentRemoved(
+  env: Env,
+  ownerId: string,
+  groupId: string,
+  targetType: 'submission' | 'comment',
+): Promise<void> {
+  await sendPushToUsers(env, [ownerId], {
+    title:
+      targetType === 'submission'
+        ? 'A proof was removed after reports'
+        : 'A comment was removed after reports',
+    body: 'The club reported it and it is now hidden.',
+    groupId,
+  });
 }
 
 /** Test helper. */

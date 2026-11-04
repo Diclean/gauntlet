@@ -49,6 +49,18 @@ export function payloadTooLarge(message = 'File is too large'): ApiError {
   return new ApiError(413, 'payload_too_large', message);
 }
 
+/** Missing or non-numeric Content-Length, before reading a streaming body. */
+export function lengthRequired(message = 'Content-Length is required'): ApiError {
+  return new ApiError(411, 'length_required', message);
+}
+
+/** A quota rejection that is distinct from the generic rate limiter. */
+export function quotaExceeded(code: string, message: string, retryAfterSeconds: number): ApiError {
+  return new ApiError(429, code, message, {
+    'Retry-After': String(Math.max(1, Math.ceil(retryAfterSeconds))),
+  });
+}
+
 export function unprocessable(code: string, message: string): ApiError {
   return new ApiError(422, code, message);
 }

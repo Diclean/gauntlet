@@ -22,11 +22,14 @@ struct ProofCaptureView: View {
                     capturePrompt
                 }
             }
-            .navigationTitle("capture.title")
+            .navigationTitle("Prove it")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.ink, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("action.cancel") { dismiss() }
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(Color.card)
                 }
             }
             .fullScreenCover(isPresented: $showingCamera) {
@@ -41,13 +44,19 @@ struct ProofCaptureView: View {
                 )
                 .ignoresSafeArea()
             }
+            .onDisappear {
+                // The capture never stays on the disk: it is deleted when the sheet
+                // is closed, uploaded or replaced.
+                captured?.discard()
+                captured = nil
+            }
             .alert(
-                Text("alert.error.title"),
+                Text("Something went wrong"),
                 isPresented: Binding(
                     get: { upload.errorMessage != nil },
                     set: { if !$0 { upload.errorMessage = nil } }
                 ),
-                actions: { Button("alert.ok") { upload.errorMessage = nil } },
+                actions: { Button("OK") { upload.errorMessage = nil } },
                 message: { Text(upload.errorMessage ?? "") }
             )
         }
@@ -56,60 +65,49 @@ struct ProofCaptureView: View {
     // MARK: - Capture step
 
     private var capturePrompt: some View {
-        VStack(spacing: 20) {
-            Spacer()
+        VStack(spacing: 18) {
+            Spacer(minLength: 20)
 
-            Image(systemName: "camera.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(Color.accentColor)
+            Text("PROVE IT")
+                .labelStyle(9)
+                .foregroundStyle(Color.card)
 
-            Text("capture.challenge.title")
-                .font(.headline)
             Text(challenge.title)
-                .font(.title3.bold())
+                .displayStyle(26)
+                .foregroundStyle(Color.paper)
                 .multilineTextAlignment(.center)
 
+            Text("THE CAMERA ONLY. THE PHOTO LIBRARY IS NEVER USED.")
+                .labelStyle(8)
+                .foregroundStyle(Color.paper.opacity(0.55))
+                .multilineTextAlignment(.center)
+
+            Spacer(minLength: 20)
+
             if CameraPicker.isCameraAvailable {
-                Button {
+                BrutalButton(title: "Open the camera", trailing: "→") {
                     showingCamera = true
-                } label: {
-                    Label("capture.open_camera", systemImage: "camera")
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding(.horizontal, 32)
             } else {
-                VStack(spacing: 12) {
-                    Label("capture.camera_unavailable", systemImage: "camera.badge.ellipsis")
-                        .font(.headline)
-                        .foregroundStyle(.orange)
-                    Text("capture.camera_unavailable_hint")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                VStack(spacing: 8) {
+                    Text("NO CAMERA ON THIS DEVICE")
+                        .displayStyle(16)
+                        .foregroundStyle(Color.red)
+                    Text("Use a sample proof instead.")
+                        .labelStyle(9)
+                        .foregroundStyle(Color.paper.opacity(0.6))
                 }
-                .padding(.horizontal, 32)
             }
 
             if canUseSampleImage {
-                Button {
+                BrutalOutlineButton(title: "Use a sample proof") {
                     useSampleImage()
-                } label: {
-                    Label("capture.use_sample", systemImage: "photo.on.rectangle")
                 }
-                .buttonStyle(.bordered)
             }
 
-            Spacer()
-
-            Text("capture.camera_only_note")
-                .font(.footnote)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-                .padding(.bottom, 16)
+            Spacer(minLength: 20)
         }
+        .padding(.horizontal, 18)
     }
 
     // MARK: - Preview step
@@ -121,9 +119,16 @@ struct ProofCaptureView: View {
                 .background(Color.black)
 
             VStack(spacing: 12) {
-                TextField("capture.caption.placeholder", text: $caption, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
+                TextField("", text: $caption, prompt: Text.gauntletPlaceholder("Caption"), axis: .vertical)
+                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color.paper)
+                    .tint(Color.card)
                     .lineLimit(1 ... 3)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .overlay {
+                        Rectangle().stroke(Color.paper.opacity(0.4), lineWidth: 1.5)
+                    }
                     .onChange(of: caption) { _, value in
                         if value.count > 200 {
                             caption = String(value.prefix(200))
@@ -132,32 +137,31 @@ struct ProofCaptureView: View {
 
                 if upload.isUploading {
                     ProgressView(value: upload.fraction) {
-                        Text("capture.uploading")
+                        Text("UPLOADING")
+                            .labelStyle(8)
+                            .foregroundStyle(Color.paper)
                     }
                     .progressViewStyle(.linear)
+                    .tint(Color.card)
                 }
 
-                HStack {
-                    Button("capture.retake") {
+                HStack(spacing: 10) {
+                    BrutalOutlineButton(title: "Retake") {
+                        captured?.discard()
                         captured = nil
                         caption = ""
                         upload.fraction = 0
                     }
-                    .buttonStyle(.bordered)
+                    .frame(maxWidth: 110)
 
-                    Spacer()
-
-                    Button {
+                    BrutalButton(title: "Send it", trailing: "→") {
                         uploadProof(media)
-                    } label: {
-                        Label("capture.upload", systemImage: "arrow.up.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
                     .disabled(upload.isUploading)
                 }
             }
-            .padding()
-            .background(Color(uiColor: .systemGroupedBackground))
+            .padding(18)
+            .background(Color.ink)
         }
     }
 
@@ -217,6 +221,9 @@ struct ProofCaptureView: View {
 
                 upload.isUploading = false
                 Haptics.success()
+                // The proof is on the server: the capture leaves the disk of the device.
+                media.discard()
+                captured = nil
                 dismiss()
             } catch {
                 upload.isUploading = false

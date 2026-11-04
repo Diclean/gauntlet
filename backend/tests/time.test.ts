@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getLocalParts,
   getWeekBounds,
+  isMonthlyAwardsWindow,
   isReminderWindow,
   isValidTimeZone,
   localDateKey,
@@ -104,5 +105,69 @@ describe('timezone helpers', () => {
   it('startOfLocalWeek is idempotent', () => {
     const start = startOfLocalWeek(1_736_337_600, 'America/New_York');
     expect(startOfLocalWeek(start, 'America/New_York')).toBe(start);
+  });
+});
+
+describe('monthly awards window', () => {
+  // 2025-09-01 is a Monday and the 1st of the month: the window opens at 19:00.
+  const SEP_1_1900_UTC = 1_756_753_200;
+  const SEP_1_1859_UTC = SEP_1_1900_UTC - 60;
+
+  it('opens on the first Monday at 19:00 local, not at 18:59', () => {
+    expect(isMonthlyAwardsWindow(SEP_1_1859_UTC, 'UTC')).toBe(false);
+    expect(isMonthlyAwardsWindow(SEP_1_1900_UTC, 'UTC')).toBe(true);
+    // Later ticks the same evening still retry/confirm the run.
+    expect(isMonthlyAwardsWindow(SEP_1_1900_UTC + 3 * 3_600, 'UTC')).toBe(true);
+  });
+
+  it('does nothing on the 1st when the 1st is not the first Monday', () => {
+    // 2025-10-01 is a Wednesday; Awards night is Monday 2025-10-06.
+    expect(isMonthlyAwardsWindow(1_759_345_200, 'UTC')).toBe(false);
+    expect(isMonthlyAwardsWindow(1_759_777_200, 'UTC')).toBe(true);
+  });
+
+  it('does not run on a later Monday of the month', () => {
+    // 2025-09-08 is the second Monday.
+    expect(isMonthlyAwardsWindow(1_757_358_000, 'UTC')).toBe(false);
+    // The day after the first Monday is a Tuesday.
+    expect(isMonthlyAwardsWindow(1_756_839_600, 'UTC')).toBe(false);
+  });
+
+  it('uses local wall-clock time in Pacific/Auckland', () => {
+    // 2025-09-01 19:00 NZST (UTC+12) = 07:00 UTC.
+    expect(isMonthlyAwardsWindow(1_756_710_000, 'Pacific/Auckland')).toBe(true);
+    expect(isMonthlyAwardsWindow(1_756_710_000 - 60, 'Pacific/Auckland')).toBe(false);
+    // 07:00 UTC is still 2025-08-31 in UTC, proving local parts are used.
+    expect(getLocalParts(1_756_710_000, 'Pacific/Auckland')).toMatchObject({
+      year: 2025,
+      month: 9,
+      day: 1,
+      hour: 19,
+      weekday: 1,
+    });
+  });
+
+  it('uses local wall-clock time in America/Los_Angeles', () => {
+    // 2025-09-01 19:00 PDT (UTC-7) = 2025-09-02 02:00 UTC.
+    expect(isMonthlyAwardsWindow(1_756_778_400, 'America/Los_Angeles')).toBe(true);
+    expect(isMonthlyAwardsWindow(1_756_778_400 - 60, 'America/Los_Angeles')).toBe(false);
+    expect(getLocalParts(1_756_778_400, 'America/Los_Angeles')).toMatchObject({
+      year: 2025,
+      month: 9,
+      day: 1,
+      hour: 19,
+      weekday: 1,
+    });
+  });
+
+  it('stays at 19:00 local across the fall-back DST transition', () => {
+    // 2025-11-03 is the first Monday after US DST ends; 19:00 PST = 03:00 UTC.
+    expect(isMonthlyAwardsWindow(1_762_225_200, 'America/Los_Angeles')).toBe(true);
+    expect(isMonthlyAwardsWindow(1_762_225_200 - 60, 'America/Los_Angeles')).toBe(false);
+    expect(getLocalParts(1_762_225_200, 'America/Los_Angeles')).toMatchObject({
+      day: 3,
+      hour: 19,
+      weekday: 1,
+    });
   });
 });

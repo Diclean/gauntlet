@@ -15,6 +15,14 @@ enum KeychainError: LocalizedError, Sendable {
     }
 }
 
+/// The small surface of the Keychain that the app uses. The tests use an in-memory
+/// double, so nothing of the session ever touches the real Keychain.
+protocol KeychainStoring: Sendable {
+    func save(_ value: String) throws
+    func read() -> String?
+    func delete() throws
+}
+
 /// Minimal Keychain wrapper for the session token.
 struct KeychainStore: Sendable {
     let service: String
@@ -72,3 +80,5 @@ struct KeychainStore: Sendable {
         }
     }
 }
+
+extension KeychainStore: KeychainStoring {}

@@ -460,4 +460,10 @@ final class ModelDecodingTests: XCTestCase {
         let week = try APIJSON.decoder().decode(Week.self, from: Data(weekJSON.utf8))
         XCTAssertEqual(week.startsAt.timeIntervalSince1970, 1_735_689_600, accuracy: 0.001)
     }
+
+    func testDecodesWeeksListWrappedObject() throws {
+        let json = "{\"weeks\": [\(weekJSON)]}"
+        let response = try APIJSON.decoder().decode(WeeksResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(response.weeks.count, 1)
+    }
 }

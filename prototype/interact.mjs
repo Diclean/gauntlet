@@ -80,22 +80,28 @@ const undone = await page.evaluate((id) => {
 check('undo reverses the vote', undone.ap === before.ap && undone.mv === null, `ap back to ${undone.ap}`);
 check('undo reverses the points', undone.pts === before.pts, `${undone.pts} pts`);
 
-/* 6 — drag left rejects */
+/* 6 — drag left rejects (the top card is s1; one rejection is below the
+       threshold of 3, so it stays pending but the vote is recorded) */
 await page.click('#resetBtn');
 await page.waitForTimeout(300);
 await page.click('#jump .jump__b[data-jump="vote"]');
 await page.waitForTimeout(450);
+const beforeLeft = await page.evaluate(() => {
+  const s = pendingSubs()[0];
+  return { id: s.id, re: s.re, ap: s.ap };
+});
 const box2 = await page.locator('.vcard[data-top]').boundingBox();
 await page.mouse.move(box2.x + box2.width / 2, box2.y + box2.height / 2);
 await page.mouse.down();
 for (let i = 1; i <= 16; i++) { await page.mouse.move(box2.x + box2.width / 2 - i * 13, box2.y + box2.height / 2); await page.waitForTimeout(14); }
 await page.mouse.up();
 await page.waitForTimeout(1600);
-const rejected = await page.evaluate(() => {
-  const s = S.data.submissions.find(x => x.id === 's2');
-  return { mv: s.mv, re: s.re };
-});
-check('drag left registers a rejection', rejected.mv === false && rejected.re === 3, `re=${rejected.re}`);
+const rejected = await page.evaluate((id) => {
+  const s = S.data.submissions.find(x => x.id === id);
+  return { mv: s.mv, re: s.re, ap: s.ap, status: s.status };
+}, beforeLeft.id);
+check('drag left registers a rejection', rejected.mv === false && rejected.re === beforeLeft.re + 1, `re ${beforeLeft.re}→${rejected.re}`);
+check('a single rejection stays pending (threshold is 3)', rejected.status === 'pending', rejected.status);
 
 /* 7 — approve / reject buttons work too */
 await page.click('#resetBtn');

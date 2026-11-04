@@ -37,6 +37,9 @@ struct AppleSignInResult: Sendable {
     let identityToken: String
     let rawNonce: String
     let displayName: String?
+    /// The stable id of the Apple account — the app asks Apple whether it still
+    /// exists, so a revoked account cannot keep a session alive.
+    let appleUserID: String?
 }
 
 enum AppleSignInError: LocalizedError, Sendable {
@@ -67,7 +70,8 @@ struct AppleSignInButton: View {
         SignInWithAppleButton(.continue) { request in
             let rawNonce = AppleNonce.random()
             currentNonce = rawNonce
-            request.requestedScopes = [.fullName, .email]
+            // Only the name is asked for: the app never needs the email of the player.
+            request.requestedScopes = [.fullName]
             request.nonce = AppleNonce.sha256(rawNonce)
         } onCompletion: { result in
             switch result {
@@ -90,7 +94,8 @@ struct AppleSignInButton: View {
                         AppleSignInResult(
                             identityToken: identityToken.base64EncodedString(),
                             rawNonce: rawNonce,
-                            displayName: name
+                            displayName: name,
+                            appleUserID: credential.user
                         )
                     )
                 )

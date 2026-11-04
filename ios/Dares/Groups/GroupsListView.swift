@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// The list of the clubs of the signed in player: "Your clubs".
 struct GroupsListView: View {
     /// Only one sheet can be presented at a time, so every presentation goes through this enum.
     private enum ActiveSheet: Identifiable {
@@ -20,67 +21,43 @@ struct GroupsListView: View {
 
     @State private var activeSheet: ActiveSheet?
     @State private var showingProfileSetup = false
+    @State private var showingHouseRules = false
 
     var body: some View {
         @Bindable var router = appState.router
 
         NavigationStack(path: $router.path) {
-            List {
-                if appState.groups.isEmpty {
-                    EmptyStateView(
-                        icon: "person.3.fill",
-                        title: String(localized: "groups.empty.title"),
-                        message: String(localized: "groups.empty.message"),
-                        actionTitle: String(localized: "groups.empty.action")
-                    ) {
-                        activeSheet = .create
-                    }
-                    .listRowSeparator(.hidden)
-                } else {
-                    Section {
-                        ForEach(appState.groups) { group in
-                            NavigationLink(value: AppRoute.group(group.id)) {
-                                GroupRow(group: group)
+            ZStack(alignment: .bottom) {
+                Color.ink.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        header
+
+                        if appState.groups.isEmpty {
+                            emptyState
+                                .padding(.top, 30)
+                        } else {
+                            VStack(spacing: 10) {
+                                ForEach(appState.groups) { group in
+                                    NavigationLink(value: AppRoute.group(group.id)) {
+                                        ClubRow(group: group)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 6)
                         }
-                    } header: {
-                        Text("groups.section")
+
+                        actions
+                            .padding(.horizontal, 16)
+                            .padding(.top, 20)
+
+                        Spacer(minLength: 40)
                     }
                 }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle("groups.title")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 8) {
-                        Button {
-                            activeSheet = .profile
-                        } label: {
-                            Image(systemName: "person.crop.circle")
-                        }
-                        .accessibilityLabel(Text("profile.title"))
-                        if appState.isDemoMode {
-                            DemoBadge()
-                        }
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            activeSheet = .create
-                        } label: {
-                            Label("groups.create", systemImage: "plus.circle")
-                        }
-                        Button {
-                            activeSheet = .join
-                        } label: {
-                            Label("groups.join", systemImage: "link")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel(Text("groups.add"))
-                }
+                .scrollIndicators(.hidden)
             }
             .navigationDestination(for: AppRoute.self) { route in
                 switch route {
@@ -91,11 +68,7 @@ struct GroupsListView: View {
             .refreshable {
                 await appState.loadGroups()
             }
-            .overlay {
-                if appState.isLoadingGroups && appState.groups.isEmpty {
-                    ProgressView()
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
@@ -110,54 +83,133 @@ struct GroupsListView: View {
         .fullScreenCover(isPresented: $showingProfileSetup) {
             ProfileSetupView()
         }
+        .fullScreenCover(isPresented: $showingHouseRules) {
+            HouseRulesView()
+        }
         .onChange(of: appState.needsProfileSetup) { _, needsSetup in
             showingProfileSetup = needsSetup
         }
+        .onChange(of: appState.needsHouseRules) { _, needsRules in
+            showingHouseRules = needsRules && !appState.needsProfileSetup
+        }
         .onAppear {
             showingProfileSetup = appState.needsProfileSetup
+            showingHouseRules = appState.needsHouseRules && !appState.needsProfileSetup
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Your clubs")
+                    .displayStyle(34)
+                    .foregroundStyle(Color.paper)
+                Text("\(appState.groups.count) CLUB\(appState.groups.count == 1 ? "" : "S")")
+                    .labelStyle(8.5)
+                    .foregroundStyle(Color.paper.opacity(0.55))
+            }
+
+            Spacer(minLength: 8)
+
+            Button {
+                activeSheet = .profile
+            } label: {
+                Text(appState.user?.avatarEmoji ?? "🙂")
+                    .font(.system(size: 22))
+                    .frame(width: 40, height: 40)
+                    .background(Color.paper.opacity(0.08))
+                    .overlay {
+                        Rectangle().stroke(Color.paper.opacity(0.4), lineWidth: 1.5)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Profile"))
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+
+    // MARK: - Pieces
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Text("No club yet")
+                .displayStyle(24)
+                .foregroundStyle(Color.paper)
+            Text("Create one and invite the lads.")
+                .font(.subheadline)
+                .foregroundStyle(Color.paper.opacity(0.6))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .overlay {
+            Rectangle().stroke(Color.paper.opacity(0.3), lineWidth: 1.5)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private var actions: some View {
+        VStack(spacing: 12) {
+            BrutalButton(title: "Create club", trailing: "→") {
+                activeSheet = .create
+            }
+            BrutalOutlineButton(title: "Join with a code") {
+                activeSheet = .join
+            }
         }
     }
 }
 
-private struct GroupRow: View {
+/// One club of the list.
+private struct ClubRow: View {
     let group: Group
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.16))
-                    .frame(width: 46, height: 46)
-                Image(systemName: "flag.fill")
-                    .foregroundStyle(Color.accentColor)
-            }
+        HStack(spacing: 12) {
+            ClubCrest(initials: AppConfig.clubInitials, size: 30)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(group.name)
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(group.name.uppercased())
+                    .displayStyle(17)
+                    .foregroundStyle(Color.paper)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
                 HStack(spacing: 6) {
-                    Label {
-                        Text("\(group.memberCount)")
-                    } icon: {
-                        Image(systemName: "person.2")
-                    }
-                    .labelStyle(.titleAndIcon)
-
+                    Text("\(group.memberCount) PLAYERS")
+                        .labelStyle(8)
+                        .foregroundStyle(Color.paper.opacity(0.55))
                     if let theme = group.theme, !theme.isEmpty {
                         Text("•")
-                        Text(theme)
+                            .labelStyle(8)
+                            .foregroundStyle(Color.paper.opacity(0.4))
+                        Text(theme.uppercased())
+                            .labelStyle(8)
+                            .foregroundStyle(Color.paper.opacity(0.55))
                             .lineLimit(1)
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
+
+            Spacer(minLength: 4)
+
+            Text("→")
+                .displayStyle(16)
+                .foregroundStyle(Color.card)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(Color.paper.opacity(0.05))
+        .overlay {
+            Rectangle().stroke(Color.paper.opacity(0.35), lineWidth: 1.5)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
-#Preview("Groups") {
+#Preview("Clubs") {
     GroupsListView()
         .environment(AppState.preview())
 }

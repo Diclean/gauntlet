@@ -2,11 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- The release build talks to the production of Apple: a push of the sandbox
+	     never arrives in a build of the App Store. The debug build uses
+	     `Dares-Debug.entitlements` with the development environment. -->
 	<key>aps-environment</key>
-	<string>development</string>
+	<string>production</string>
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>
+	</array>
+	<!-- The universal links of the invite: `https://<host>/join/<code>` opens the join
+	     confirmation screen (SPEC.md, section 6.8). The host has to be the API host and
+	     the app id has to be `<APPLE_TEAM_ID>.com.mathys.dares`, exactly like the
+	     `.well-known/apple-app-site-association` of the Worker. Replace the placeholder
+	     with the host of the deployment and add the file to the Apple Developer portal. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:dares.example.workers.dev</string>
 	</array>
 </dict>
 </plist>

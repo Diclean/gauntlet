@@ -8,14 +8,15 @@ enum MockData {
 
     static let group = Group(
         id: "group-1",
-        name: "Weekend Warriors",
+        name: DemoSeed.clubName,
         inviteCode: "K7M2PQ",
         challengesPerWeek: 5,
-        theme: "Outdoors only",
+        theme: "One kick, one dares",
         language: "en",
         timezone: "Europe/Paris",
         ownerId: me.id,
-        memberCount: 6
+        memberCount: 5,
+        forfeit: Group.defaultForfeit
     )
 
     static let members: [Member] = [
@@ -29,14 +30,21 @@ enum MockData {
         let start = calendar.date(byAdding: .day, value: -3, to: Date()) ?? Date()
         let end = calendar.date(byAdding: .day, value: 4, to: start) ?? Date()
         let deadline = calendar.date(byAdding: .hour, value: 12, to: end) ?? Date()
-        return Week(id: "week-1", startsAt: start, endsAt: end, voteDeadline: deadline, status: .open)
+        return Week(
+            id: "week-1",
+            number: 12,
+            startsAt: start,
+            endsAt: end,
+            voteDeadline: deadline,
+            status: .open
+        )
     }
 
     static let challenges: [Challenge] = [
         Challenge(
             id: "challenge-1",
             title: "Sunrise on a hill",
-            description: "Catch the sun coming up from a hill or a rooftop before 8am.",
+            description: "Catch the sun coming up from a hill before eight.",
             difficulty: .easy,
             points: 10,
             position: 1,
@@ -50,17 +58,37 @@ enum MockData {
             difficulty: .medium,
             points: 25,
             position: 2,
-            myStatus: .pending,
-            acceptedCount: 1
+            myStatus: .accepted,
+            acceptedCount: 2
         ),
         Challenge(
             id: "challenge-3",
-            title: "No-phone afternoon",
-            description: "Spend three hours without your phone and film the view you earned.",
+            title: "Score a Panenka",
+            description: "The chip is the hard part. Film the miss as well.",
             difficulty: .hard,
             points: 50,
             position: 3,
-            myStatus: .todo,
+            myStatus: .accepted,
+            acceptedCount: 2
+        ),
+        Challenge(
+            id: "challenge-4",
+            title: "Sunset swim",
+            description: "Cold water, loud music, no regrets.",
+            difficulty: .medium,
+            points: 25,
+            position: 4,
+            myStatus: .rejected,
+            acceptedCount: 0
+        ),
+        Challenge(
+            id: "challenge-5",
+            title: "Ref a kids' match",
+            description: "Full time, all out. The kids decide.",
+            difficulty: .hard,
+            points: 50,
+            position: 5,
+            myStatus: .pending,
             acceptedCount: 0
         ),
     ]
@@ -68,8 +96,8 @@ enum MockData {
     static let submissions: [Submission] = [
         Submission(
             id: "submission-1",
-            challengeId: "challenge-1",
-            challengeTitle: "Sunrise on a hill",
+            challengeId: "challenge-2",
+            challengeTitle: "Cook a stranger's recipe",
             user: friend,
             mediaUrl: "/media/sample",
             mediaType: .photo,
@@ -84,8 +112,8 @@ enum MockData {
         ),
         Submission(
             id: "submission-2",
-            challengeId: "challenge-2",
-            challengeTitle: "Cook a stranger's recipe",
+            challengeId: "challenge-1",
+            challengeTitle: "Sunrise on a hill",
             user: other,
             mediaUrl: "/media/sample",
             mediaType: .video,
@@ -101,8 +129,25 @@ enum MockData {
     ]
 
     static let leaderboard: [LeaderboardEntry] = [
-        LeaderboardEntry(user: friend, points: 120, rank: 1, streak: 4),
-        LeaderboardEntry(user: me, points: 85, rank: 2, streak: 2),
-        LeaderboardEntry(user: other, points: 60, rank: 3, streak: 1),
+        LeaderboardEntry(user: me, points: 115, rank: 1, streak: 4),
+        LeaderboardEntry(user: friend, points: 60, rank: 2, streak: 2),
+        LeaderboardEntry(user: other, points: 35, rank: 3, streak: 1),
     ]
+
+    static let award = Award(
+        award: .playerOfTheMonth,
+        winners: [me],
+        value: 365,
+        nominees: [
+            AwardNominee(user: me, value: 365),
+            AwardNominee(user: friend, value: 340),
+            AwardNominee(user: other, value: 245),
+        ],
+        stats: [
+            "goals": 14,
+            "redCards": 1,
+            "firstToScore": 4,
+            "bestWeek": 115,
+        ]
+    )
 }

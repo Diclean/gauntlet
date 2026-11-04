@@ -205,5 +205,87 @@ export function localDateKey(instant: number, timeZone: string): string {
   const local = getLocalParts(instant, timeZone);
   return `${local.year.toString().padStart(4, '0')}-${local.month
     .toString()
-    .padStart(2, '0')}-${local.day.toString().padStart(2, '0')}`;
+    .padStart(2, '0')}-${local.day
+    .toString()
+    .padStart(2, '0')}`;
+}
+
+/** Local calendar month key, e.g. `2025-01`. */
+export function localMonthKey(instant: number, timeZone: string): string {
+  const local = getLocalParts(instant, timeZone);
+  return `${local.year.toString().padStart(4, '0')}-${local.month
+    .toString()
+    .padStart(2, '0')}`;
+}
+
+export function isValidMonthKey(month: string): boolean {
+  return /^\d{4}-(0[1-9]|1[0-2])$/u.test(month);
+}
+
+export function monthStartUnix(month: string, timeZone: string): number {
+  const [year, monthNumber] = month.split('-').map(Number) as [number, number];
+  return zonedTimeToUnix(year, monthNumber, 1, 0, 0, 0, timeZone);
+}
+
+/** [start, end) Unix seconds of a calendar month in the group's timezone. */
+export function monthRange(month: string, timeZone: string): { start: number; end: number } {
+  const [year, monthNumber] = month.split('-').map(Number) as [number, number];
+  const nextYear = monthNumber === 12 ? year + 1 : year;
+  const nextMonthNumber = monthNumber === 12 ? 1 : monthNumber + 1;
+  return {
+    start: zonedTimeToUnix(year, monthNumber, 1, 0, 0, 0, timeZone),
+    end: zonedTimeToUnix(nextYear, nextMonthNumber, 1, 0, 0, 0, timeZone),
+  };
+}
+
+/** Previous local calendar month key at `instant`. */
+export function previousMonthKey(instant: number, timeZone: string): string {
+  const local = getLocalParts(instant, timeZone);
+  const year = local.month === 1 ? local.year - 1 : local.year;
+  const month = local.month === 1 ? 12 : local.month - 1;
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
+}
+
+/**
+ * "Awards night" is the first Monday of the local month at/after 19:00. The
+ * hourly cron retries later the same evening, so a tick that finds a week still
+ * inside its vote grace can try again at 20:00, 21:00, ... By 19:00 the last
+ * week that starts in the previous month is always closed and past its Monday
+ * 12:00 deadline.
+ *
+ * Using local calendar parts (rather than UTC) keeps the window DST-safe: a
+ * 19:00 local ceremony is 18:00 UTC in Europe/Paris summer time but 17:00 UTC
+ * in winter.
+ */
+export function isMonthlyAwardsWindow(instant: number, timeZone: string): boolean {
+  const local = getLocalParts(instant, timeZone);
+  return local.weekday === 1 && local.day <= 7 && local.hour >= 19;
+}
+
+/** Human label for a `YYYY-MM` key, e.g. `January 2025`. */
+export function monthLabel(month: string): string {
+  const [year, monthNumber] = month.split('-').map(Number) as [number, number];
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(Date.UTC(year, monthNumber - 1, 1, 12)));
+}
+
+/**
+ * House-fixture window: Wednesday 23:59:59 local of the current matchweek.
+ * `startsAt` is that week's Monday 00:00 local.
+ */
+export function houseFixtureDeadline(startsAt: number, timeZone: string): number {
+  const monday = getLocalParts(startsAt, timeZone);
+  const wednesday = new Date(Date.UTC(monday.year, monday.month - 1, monday.day + 2));
+  return zonedTimeToUnix(
+    wednesday.getUTCFullYear(),
+    wednesday.getUTCMonth() + 1,
+    wednesday.getUTCDate(),
+    23,
+    59,
+    59,
+    timeZone,
+  );
 }

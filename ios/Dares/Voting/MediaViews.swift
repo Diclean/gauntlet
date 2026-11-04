@@ -37,6 +37,7 @@ struct LoopingVideoPlayer: View {
 /// Loads a proof photo with the bearer token.
 struct AuthenticatedPhotoView: View {
     let path: String
+    var contentMode: ContentMode = .fit
 
     @Environment(AppState.self) private var appState
     @State private var image: UIImage?
@@ -48,7 +49,7 @@ struct AuthenticatedPhotoView: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFit()
+                    .aspectRatio(contentMode: contentMode)
             } else if isLoading {
                 ProgressView()
             } else {
@@ -116,11 +117,12 @@ struct AuthenticatedVideoView: View {
 /// Shows the media of a submission, whatever its type is.
 struct ProofMediaView: View {
     let submission: Submission
+    var contentMode: ContentMode = .fit
 
     var body: some View {
         switch submission.mediaType {
         case .photo:
-            AuthenticatedPhotoView(path: submission.mediaUrl)
+            AuthenticatedPhotoView(path: submission.mediaUrl, contentMode: contentMode)
         case .video:
             AuthenticatedVideoView(path: submission.mediaUrl)
         }

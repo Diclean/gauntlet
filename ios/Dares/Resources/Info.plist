@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Dares</string>
+	<string>Gauntlet</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -49,10 +49,27 @@
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDefault</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Dares needs the camera so you can film live proof for a challenge. Proofs are recorded live — the photo library is never used.</string>
+	<string>Gauntlet needs the camera so you can film live proof for a fixture. Proofs are recorded live — the photo library is never used.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Dares records audio together with the video proof you film for a challenge.</string>
+	<string>Gauntlet records audio together with the video proof you film for a fixture.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Anton-Regular.ttf</string>
+	</array>
 	<key>API_BASE_URL</key>
 	<string>$(API_BASE_URL)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.mathys.dares.invite</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gauntlet</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

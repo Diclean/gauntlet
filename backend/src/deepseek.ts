@@ -110,6 +110,12 @@ const FALLBACK_EN: readonly PoolChallenge[] = [
   { title: 'Fix something broken', description: 'Repair an item you were about to throw away and photograph the before and after.', difficulty: 'hard' },
   { title: 'Read 30 pages', description: 'Read thirty pages of a book in one sitting and photograph the page you reached.', difficulty: 'easy' },
   { title: 'Make someone laugh', description: 'Make a friend laugh with an original joke and record their reaction (with permission).', difficulty: 'medium' },
+  { title: 'Score a Panenka', description: 'Chip a penalty Panenka-style past a consenting keeper and film the attempt — misses are part of the fun.', difficulty: 'medium' },
+  { title: 'Twenty keepy-uppies', description: 'Keep a football in the air twenty times without letting it drop, and film the final attempt.', difficulty: 'medium' },
+  { title: 'Commentate one minute of football', description: 'Record a one-minute commentary over any match, clip or kickabout — the more dramatic the better.', difficulty: 'easy' },
+  { title: 'Design a club badge', description: 'Design a badge for your friend club and show the finished artwork on camera.', difficulty: 'easy' },
+  { title: 'Referee a friendly match', description: 'Referee a friendly kickabout with everyone’s agreement and film a short clip of you making a (fair) call.', difficulty: 'hard' },
+  { title: 'Football trivia quiz', description: 'Write five football trivia questions, quiz a friend on camera and show their score.', difficulty: 'easy' },
 ];
 
 const FALLBACK_FR: readonly PoolChallenge[] = [
@@ -137,6 +143,12 @@ const FALLBACK_FR: readonly PoolChallenge[] = [
   { title: 'Réalise un time-lapse', description: 'Filme un time-lapse de 15 secondes de quelque chose qui change, comme un dessin ou un coucher de soleil.', difficulty: 'easy' },
   { title: 'Fais cinq compliments', description: 'Fais cinq compliments sincères en une journée et raconte l’expérience en vidéo.', difficulty: 'easy' },
   { title: 'Répare un objet cassé', description: 'Répare un objet que tu allais jeter et photographie avant et après.', difficulty: 'hard' },
+  { title: 'Marque une Panenka', description: 'Tente une Panenka sur penalty face à un gardien consentant et filme l’essai — rater fait partie du jeu.', difficulty: 'medium' },
+  { title: 'Vingt jongles', description: 'Garde un ballon en l’air vingt fois sans qu’il tombe et filme la dernière tentative.', difficulty: 'medium' },
+  { title: 'Commente une minute de foot', description: 'Enregistre une minute de commentaire sur un match, un extrait ou une partie improvisée — plus c’est dramatique, mieux c’est.', difficulty: 'easy' },
+  { title: 'Dessine l’écusson du club', description: 'Crée un écusson pour votre club d’amis et montre le dessin final en vidéo.', difficulty: 'easy' },
+  { title: 'Arbitre un match amical', description: 'Arbitre une partie amicale avec l’accord de tous et filme un court extrait d’une décision (équitable).', difficulty: 'hard' },
+  { title: 'Quiz de culture foot', description: 'Écris cinq questions de culture football, interroge un ami en vidéo et montre son score.', difficulty: 'easy' },
 ];
 
 function fallbackPool(language: string): readonly PoolChallenge[] {
@@ -212,14 +224,16 @@ export function buildChallengePrompt(params: {
     ? params.previousTitles.map((title) => `- ${title}`).join('\n')
     : '- (none yet)';
   return [
-    `Create exactly ${params.count} weekly dares for a small friend group.`,
+    `Create exactly ${params.count} weekly fixtures for a Sunday-league-style friend club.`,
     `Write all titles and descriptions in ${languageName(params.language)}.`,
     `Group timezone: ${params.timezone}.`,
     params.theme ? `Theme: ${params.theme}` : 'Theme: surprise us, keep it varied.',
     '',
+    'Tone: a fun, social friend club with a football-flavoured matchday feel.',
     'Rules:',
-    '- Dares must be safe, legal, non-humiliating, and doable within one week.',
-    '- They must be provable with a photo or a short video.',
+    '- Treat each challenge as a "fixture": playful, social, and provable with a photo or a short video.',
+    '- A few can be football-flavoured (a Panenka, a refereeing cameo, a club badge), but most must be doable by people who do not play football.',
+    '- Everything must be safe, legal, consensual and non-humiliating. Never pressure anyone into anything.',
     '- Do not require spending a lot of money, alcohol, or anything risky.',
     '- Mix easy, medium and hard difficulty.',
     '- Each title is at most 80 characters; each description is at most 300 characters.',
@@ -283,7 +297,7 @@ export async function generateChallenges(
           {
             role: 'system',
             content:
-              'You design safe, playful, camera-provable weekly challenges for friend groups. Reply with valid JSON only.',
+              'You design safe, playful, camera-provable weekly fixtures for Sunday-league-style friend clubs. Keep them social, legal, consensual and never humiliating. Reply with valid JSON only.',
           },
           {
             role: 'user',
@@ -317,6 +331,109 @@ export async function generateChallenges(
       };
     }
     return { challenges: valid.slice(0, params.count), source: 'deepseek' };
+  } catch {
+    return fallback();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** First fallback-pool fixture of a given difficulty (veto replacement). */
+export function fallbackChallengeForDifficulty(
+  difficulty: Difficulty,
+  language: string,
+  previousTitles: readonly string[] = [],
+): ChallengeDraft {
+  const preferred = fallbackChallenges(10, language, previousTitles).find(
+    (challenge) => challenge.difficulty === difficulty,
+  );
+  if (preferred) return preferred;
+  const any = fallbackChallenges(10, language).find(
+    (challenge) => challenge.difficulty === difficulty,
+  );
+  if (any) return any;
+  const pool = fallbackPool(language);
+  return { ...(pool.find((challenge) => challenge.difficulty === difficulty) ?? pool[0]!) };
+}
+
+/**
+ * One replacement fixture for a vetoed challenge: same difficulty, fresh title
+ * (DeepSeek when configured, fallback pool otherwise). AI output is forced to
+ * the requested difficulty so the replacement keeps the old fixture's points.
+ */
+export async function generateReplacementChallenge(params: {
+  env: Env;
+  difficulty: Difficulty;
+  language: string;
+  timezone: string;
+  theme: string | null;
+  previousTitles: readonly string[];
+  fetchImpl?: typeof fetch;
+}): Promise<ChallengeDraft> {
+  const fallback = (): ChallengeDraft =>
+    fallbackChallengeForDifficulty(params.difficulty, params.language, params.previousTitles);
+
+  const apiKey = params.env.DEEPSEEK_API_KEY?.trim();
+  if (!apiKey) return fallback();
+
+  const baseUrl = (params.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/u, '');
+  const fetchImpl = params.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  const prompt = [
+    buildChallengePrompt({
+      count: 1,
+      theme: params.theme,
+      language: params.language,
+      timezone: params.timezone,
+      previousTitles: params.previousTitles,
+    }),
+    `The single fixture MUST have difficulty "${params.difficulty}".`,
+    'Do not reuse any of the titles listed above.',
+  ].join('\n');
+
+  try {
+    const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        response_format: { type: 'json_object' },
+        temperature: 0.9,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You design safe, playful, camera-provable weekly fixtures for Sunday-league-style friend clubs. Keep them social, legal, consensual and never humiliating. Reply with valid JSON only.',
+          },
+          { role: 'user', content: prompt },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return fallback();
+
+    const raw: unknown = await response.json();
+    const envelope = deepseekResponseSchema.safeParse(raw);
+    if (!envelope.success) return fallback();
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(stripCodeFence(envelope.data.choices[0]!.message.content));
+    } catch {
+      return fallback();
+    }
+
+    const valid = parseChallengesPayload(payload, 1);
+    const draft = valid?.[0];
+    if (!draft) return fallback();
+    return { ...draft, difficulty: params.difficulty };
   } catch {
     return fallback();
   } finally {

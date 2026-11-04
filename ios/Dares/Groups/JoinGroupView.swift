@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// The join of a club with an invite code.
 struct JoinGroupView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
@@ -10,50 +11,66 @@ struct JoinGroupView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("join.section.code") {
-                    TextField("join.code.placeholder", text: $code)
+            ZStack {
+                Color.ink.ignoresSafeArea()
+
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Join a club")
+                        .displayStyle(32)
+                        .foregroundStyle(Color.paper)
+
+                    Text("INVITE CODE")
+                        .labelStyle(8)
+                        .foregroundStyle(Color.paper.opacity(0.7))
+
+                    TextField("", text: $code, prompt: Text.gauntletPlaceholder("K7M2PQ", size: 24, color: Color.card.opacity(0.7)))
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
-                        .font(.title2.monospaced())
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .tracking(4)
+                        .foregroundStyle(Color.card)
+                        .tint(Color.card)
+                        .padding(.horizontal, 12)
+                        .frame(height: 56)
+                        .overlay {
+                            Rectangle().stroke(Color.paper.opacity(0.4), lineWidth: 1.5)
+                        }
                         .onChange(of: code) { _, newValue in
                             code = String(newValue.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
                         }
-                }
 
-                Section {
-                    Text("join.hint")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text("Six characters, no zeroes, no O. Ask the club.")
+                        .labelStyle(8)
+                        .foregroundStyle(Color.paper.opacity(0.5))
+
                     if appState.isDemoMode {
-                        Text("demo.join.hint")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Text("Demo: the code of Tuesday Training is prefilled.")
+                            .labelStyle(8)
+                            .foregroundStyle(Color.card)
                     }
+
+                    Spacer(minLength: 0)
+
+                    BrutalButton(title: isSubmitting ? "Joining…" : "Join the club", trailing: "→") {
+                        join()
+                    }
+                    .disabled(code.count != 6 || isSubmitting)
+
+                    Spacer(minLength: 20)
                 }
-            }
-            .navigationTitle("join.title")
-            .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                // The demo prefills the invite code of a group that really exists.
-                if appState.isDemoMode, code.isEmpty {
-                    code = "PL4XZ9"
-                }
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("action.cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("action.join") { join() }
-                        .disabled(code.count != 6 || isSubmitting)
+                        .foregroundStyle(Color.card)
                 }
             }
-            .overlay {
-                if isSubmitting {
-                    ProgressView()
-                        .padding(12)
-                        .background(.regularMaterial, in: .rect(cornerRadius: 10))
+            .onAppear {
+                // The demo prefills the invite code of a club that really exists.
+                if appState.isDemoMode, code.isEmpty {
+                    code = "TRN4XP"
                 }
             }
             .alert(
@@ -85,7 +102,7 @@ struct JoinGroupView: View {
     }
 }
 
-#Preview("Join group") {
+#Preview("Join club") {
     JoinGroupView()
         .environment(AppState.preview())
 }

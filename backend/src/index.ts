@@ -8,6 +8,9 @@ import groupRoutes from './routes/groups';
 import challengeRoutes from './routes/challenges';
 import submissionRoutes from './routes/submissions';
 import mediaRoutes from './routes/media';
+import commentRoutes from './routes/comments';
+import userRoutes from './routes/users';
+import publicRoutes from './routes/public';
 import { runCron } from './cron';
 
 const app = new Hono<AppEnv>();
@@ -21,6 +24,9 @@ app.use('*', async (c, next) => {
 
 app.get('/health', (c) => c.json({ ok: true }));
 
+// Public, unauthenticated: invite landing page + universal-link association.
+app.route('/', publicRoutes);
+
 app.route('/auth', authRoutes);
 app.route('/me', meRoutes);
 app.route('/devices', deviceRoutes);
@@ -28,6 +34,8 @@ app.route('/groups', groupRoutes);
 app.route('/challenges', challengeRoutes);
 app.route('/submissions', submissionRoutes);
 app.route('/media', mediaRoutes);
+app.route('/comments', commentRoutes);
+app.route('/users', userRoutes);
 
 app.onError(errorHandler);
 app.notFound(notFoundHandler);

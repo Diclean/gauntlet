@@ -42,7 +42,6 @@ targets:
         PRODUCT_NAME: Dares
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
-        CODE_SIGN_ENTITLEMENTS: Dares/Resources/Dares.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: YES
@@ -50,8 +49,12 @@ targets:
       configs:
         Debug:
           INFOPLIST_FILE: Dares/Resources/Info-Debug.plist
+          # The debug build pushes through the sandbox of Apple.
+          CODE_SIGN_ENTITLEMENTS: Dares/Resources/Dares-Debug.entitlements
         Release:
           INFOPLIST_FILE: Dares/Resources/Info.plist
+          # The release build pushes through the production of Apple.
+          CODE_SIGN_ENTITLEMENTS: Dares/Resources/Dares.entitlements
     scheme:
       testTargets:
         - DaresTests

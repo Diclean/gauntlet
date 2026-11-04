@@ -22,8 +22,20 @@ export const TOKEN_2 = 'token-for-user-2-0123456789abcdef';
 export const TOKEN_3 = 'token-for-user-3-0123456789abcdef';
 
 const TABLES = [
+  'used_nonces',
+  'reactions',
+  'comments',
+  'banter_pushes',
+  'reports',
+  'blocks',
+  'group_bans',
+  'vetoes',
+  'captains',
+  'notification_prefs',
   'votes',
   'point_events',
+  'monthly_award_runs',
+  'monthly_awards',
   'submissions',
   'challenges',
   'weeks',
@@ -46,13 +58,17 @@ export async function insertUser(
   id: string,
   name: string,
   emoji: string | null = null,
+  options: { terms?: boolean } = {},
 ): Promise<void> {
+  // Fixtures accept the house rules by default; pass {terms:false} to test the gate.
+  const termsAcceptedAt = options.terms === false ? null : NOW - 9_000;
   await db
     .prepare(
-      `INSERT INTO users (id, apple_sub, display_name, avatar_emoji, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO users
+         (id, apple_sub, display_name, avatar_emoji, created_at, terms_accepted_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, `apple-${id}`, name, emoji, NOW - 10_000)
+    .bind(id, `apple-${id}`, name, emoji, NOW - 10_000, termsAcceptedAt)
     .run();
 }
 
@@ -76,14 +92,16 @@ export async function insertGroup(
   ownerId: string,
   inviteCode: string,
   name = 'Test group',
+  forfeit = 'Buys the round 🍺',
+  timezone = 'UTC',
 ): Promise<void> {
   await db
     .prepare(
       `INSERT INTO groups
-         (id, name, owner_id, invite_code, challenges_per_week, theme, language, timezone, created_at)
-       VALUES (?, ?, ?, ?, 5, NULL, 'en', 'UTC', ?)`,
+         (id, name, owner_id, invite_code, challenges_per_week, theme, language, timezone, forfeit, created_at)
+       VALUES (?, ?, ?, ?, 5, NULL, 'en', ?, ?, ?)`,
     )
-    .bind(id, name, ownerId, inviteCode, NOW - 5_000)
+    .bind(id, name, ownerId, inviteCode, timezone, forfeit, NOW - 5_000)
     .run();
 }
 
@@ -104,13 +122,18 @@ export async function insertWeek(
   groupId: string,
   id = WEEK,
   status: 'open' | 'closed' = 'open',
-  options: { startsAt?: number; endsAt?: number; voteDeadline?: number } = {},
+  options: {
+    startsAt?: number;
+    endsAt?: number;
+    voteDeadline?: number;
+    number?: number;
+  } = {},
 ): Promise<void> {
   const startsAt = options.startsAt ?? WEEK_START;
   await db
     .prepare(
-      `INSERT INTO weeks (id, group_id, starts_at, ends_at, vote_deadline, status, reminder_sent)
-       VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      `INSERT INTO weeks (id, group_id, starts_at, ends_at, vote_deadline, status, reminder_sent, number)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
     )
     .bind(
       id,
@@ -119,6 +142,7 @@ export async function insertWeek(
       options.endsAt ?? startsAt + 7 * 86_400 - 1,
       options.voteDeadline ?? VOTE_DEADLINE,
       status,
+      options.number ?? 1,
     )
     .run();
 }
@@ -145,7 +169,7 @@ export async function insertSubmission(
     challengeId?: string;
     userId?: string;
     mediaKey?: string;
-    status?: 'pending' | 'accepted' | 'rejected' | 'expired';
+    status?: 'pending' | 'accepted' | 'rejected' | 'expired' | 'removed';
     eligibleVoters?: number;
     createdAt?: number;
   } = {},
@@ -166,6 +190,80 @@ export async function insertSubmission(
       options.status ?? 'pending',
       options.eligibleVoters ?? 1,
       options.createdAt ?? NOW - 1_000,
+    )
+    .run();
+}
+
+export async function insertPointEvent(
+  db: D1Database,
+  options: {
+    id?: string;
+    groupId?: string;
+    weekId: string;
+    userId: string;
+    kind?:
+      | 'challenge'
+      | 'first_bonus'
+      | 'weekly_winner'
+      | 'streak'
+      | 'monthly_award'
+      | 'captain';
+    points: number;
+    submissionId?: string | null;
+    createdAt?: number;
+  },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO point_events
+         (id, group_id, week_id, user_id, kind, points, submission_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      options.id ?? crypto.randomUUID(),
+      options.groupId ?? GROUP,
+      options.weekId,
+      options.userId,
+      options.kind ?? 'challenge',
+      options.points,
+      options.submissionId ?? null,
+      options.createdAt ?? NOW,
+    )
+    .run();
+}
+
+export async function insertMonthlyAward(
+  db: D1Database,
+  options: {
+    id?: string;
+    groupId?: string;
+    month: string;
+    award:
+      | 'player_of_the_month'
+      | 'golden_boot'
+      | 'toughest_ref'
+      | 'comeback_kid'
+      | 'first_to_score'
+      | 'wooden_spoon';
+    userId: string;
+    value?: number;
+    createdAt?: number;
+  },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO monthly_awards
+         (id, group_id, month, award, user_id, value, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      options.id ?? crypto.randomUUID(),
+      options.groupId ?? GROUP,
+      options.month,
+      options.award,
+      options.userId,
+      options.value ?? 0,
+      options.createdAt ?? NOW,
     )
     .run();
 }

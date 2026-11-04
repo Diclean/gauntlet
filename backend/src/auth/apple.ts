@@ -187,7 +187,8 @@ export async function verifyAppleIdentityToken(
 
   // The client sends the raw nonce; Apple's token carries SHA-256(rawNonce), hex.
   const expectedNonce = await sha256Hex(rawNonce);
-  if (!claims.nonce || !timingSafeEqual(claims.nonce.trim().toLowerCase(), expectedNonce)) {
+  const tokenNonce = claims.nonce?.trim().toLowerCase();
+  if (!tokenNonce || !timingSafeEqual(tokenNonce, expectedNonce)) {
     throw unauthorized('Apple identity token nonce does not match');
   }
 
@@ -198,6 +199,20 @@ export async function verifyAppleIdentityToken(
     key,
   );
   if (!signatureValid) throw unauthorized('Apple identity token signature is invalid');
+
+  // One-shot replay guard: burn sha256(rawNonce) only after the signature and
+  // every claim check passed. Expiry follows the token's own exp, and the cron
+  // purge removes rows once they can no longer be presented.
+  const nonceHash = expectedNonce;
+  const consumed = await env.DB.prepare(
+    `INSERT INTO used_nonces (nonce_hash, expires_at, created_at) VALUES (?, ?, ?)
+     ON CONFLICT(nonce_hash) DO NOTHING`,
+  )
+    .bind(nonceHash, claims.exp, now)
+    .run();
+  if ((consumed.meta.changes ?? 0) === 0) {
+    throw unauthorized('Apple identity token nonce was already used');
+  }
 
   return claims;
 }

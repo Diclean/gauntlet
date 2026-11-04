@@ -2,13 +2,28 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { first, nowSeconds } from '../lib/db';
 import { randomId } from '../lib/crypto';
-import { ApiError, badRequest, conflict, notFound, payloadTooLarge } from '../lib/errors';
+import {
+  ApiError,
+  badRequest,
+  conflict,
+  lengthRequired,
+  notFound,
+  payloadTooLarge,
+  quotaExceeded,
+} from '../lib/errors';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit } from '../middleware/rate-limit';
 import { runInBackground } from '../middleware/background';
-import { requireGroupMembership } from '../services/groups';
+import { countMembers, getGroupRow, requireGroupMembership } from '../services/groups';
 import { loadSubmissionView } from '../services/submissions';
-import { pushNewSubmission } from '../push';
+import { deleteSubmissionMedia } from '../services/media';
+import {
+  getChallengeRow,
+  getWeekRow,
+  toggleVeto,
+} from '../services/fixtures';
+import { challengeWithMyStatus } from '../services/weeks';
+import { pushFixtureVetoed, pushNewSubmission } from '../push';
 
 const app = new Hono<AppEnv>();
 app.use('*', requireAuth);
@@ -16,6 +31,9 @@ app.use('*', requireAuth);
 const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 const FORM_OVERHEAD_BYTES = 1024 * 1024;
+/** Rolling 24h upload cap per member, independent of the short-burst bucket. */
+const UPLOAD_QUOTA_PER_DAY = 30;
+const UPLOAD_QUOTA_WINDOW_SECONDS = 24 * 60 * 60;
 
 const PHOTO_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -39,6 +57,7 @@ interface ChallengeContextRow {
   ends_at: number;
   vote_deadline: number;
   week_status: 'open' | 'closed';
+  vetoed_at: number | null;
 }
 
 /**
@@ -56,7 +75,7 @@ app.post(
 
     const challenge = await first<ChallengeContextRow>(
       c.env.DB.prepare(
-        `SELECT c.id, c.title, c.points, c.week_id,
+        `SELECT c.id, c.title, c.points, c.week_id, c.vetoed_at,
                 w.group_id, w.starts_at, w.ends_at, w.vote_deadline,
                 w.status AS week_status
            FROM challenges c
@@ -64,7 +83,7 @@ app.post(
           WHERE c.id = ?`,
       ).bind(c.req.param('id')),
     );
-    if (!challenge) throw notFound('Challenge not found');
+    if (!challenge || challenge.vetoed_at !== null) throw notFound('Challenge not found');
 
     await requireGroupMembership(c.env.DB, challenge.group_id, userId);
 
@@ -86,9 +105,32 @@ app.post(
       throw conflict('submission_pending', 'A proof is already waiting for votes');
     }
 
-    const contentLength = Number(c.req.header('content-length') ?? '');
-    if (Number.isFinite(contentLength) && contentLength > VIDEO_MAX_BYTES + FORM_OVERHEAD_BYTES) {
+    // Multpart bodies must declare their length up front: without a numeric
+    // Content-Length we cannot reject an oversized upload before buffering the
+    // whole form in memory. The post-buffer `media.size` check stays below.
+    const rawContentLength = c.req.header('content-length');
+    if (rawContentLength === undefined || !/^\d+$/u.test(rawContentLength)) {
+      throw lengthRequired('A numeric Content-Length header is required for uploads');
+    }
+    const contentLength = Number(rawContentLength);
+    if (contentLength > VIDEO_MAX_BYTES + FORM_OVERHEAD_BYTES) {
       throw payloadTooLarge('Upload is too large');
+    }
+
+    const recentUploads = await first<{ count: number; oldest: number | null }>(
+      c.env.DB.prepare(
+        `SELECT COUNT(*) AS count, MIN(created_at) AS oldest
+           FROM submissions
+          WHERE user_id = ? AND created_at > ?`,
+      ).bind(userId, now - UPLOAD_QUOTA_WINDOW_SECONDS),
+    );
+    if ((recentUploads?.count ?? 0) >= UPLOAD_QUOTA_PER_DAY) {
+      const retryAfter = (recentUploads?.oldest ?? now) + UPLOAD_QUOTA_WINDOW_SECONDS - now;
+      throw quotaExceeded(
+        'upload_quota',
+        'You have reached the daily upload limit',
+        retryAfter,
+      );
     }
 
     let form: FormData;
@@ -181,7 +223,7 @@ app.post(
         )
         .run();
     } catch (error) {
-      await c.env.MEDIA.delete(mediaKey).catch(() => undefined);
+      await deleteSubmissionMedia(c.env, mediaKey);
       if (error instanceof Error && /unique|constraint/iu.test(error.message)) {
         throw conflict('submission_pending', 'A proof is already waiting for votes');
       }
@@ -199,5 +241,52 @@ app.post(
     return c.json({ submission }, 201);
   },
 );
+
+/**
+ * POST /challenges/:id/veto — toggle my veto on a current-week fixture. At the
+ * threshold the fixture is replaced in place (max twice per club per week).
+ */
+app.post('/:id/veto', rateLimit({ bucket: 'veto', capacity: 30, refillPerSecond: 30 / 300, by: 'user' }), async (c) => {
+  const userId = c.get('user').id;
+  const now = nowSeconds();
+
+  const challenge = await getChallengeRow(c.env.DB, c.req.param('id'));
+  if (!challenge || challenge.vetoed_at !== null) throw notFound('Challenge not found');
+
+  const week = await getWeekRow(c.env.DB, challenge.week_id);
+  if (!week) throw notFound('Challenge not found');
+  const group = await getGroupRow(c.env.DB, week.group_id);
+  if (!group) throw notFound('Challenge not found');
+  await requireGroupMembership(c.env.DB, group.id, userId);
+
+  if (week.status !== 'open' || now < week.starts_at || now > week.ends_at) {
+    throw conflict('week_closed', 'Vetoes are only open during the current week');
+  }
+
+  const memberCount = await countMembers(c.env.DB, group.id);
+  const result = await toggleVeto(c.env, {
+    challenge,
+    week,
+    group,
+    userId,
+    memberCount,
+    now,
+  });
+
+  const json = await challengeWithMyStatus(
+    c.env.DB,
+    result.challengeId,
+    userId,
+    memberCount,
+    now,
+  );
+  if (!json) throw new Error('challenge_missing_after_veto');
+
+  if (result.replaced) {
+    runInBackground(c, pushFixtureVetoed(c.env, group.id, challenge.position));
+  }
+
+  return c.json({ challenge: json, replaced: result.replaced });
+});
 
 export default app;

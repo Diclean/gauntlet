@@ -81,7 +81,9 @@ struct CameraPicker: UIViewControllerRepresentable {
             let destination = URL.temporaryDirectory
                 .appending(path: "dares-proof-\(UUID().uuidString).\(fileExtension)")
             let data = try Data(contentsOf: url)
-            try data.write(to: destination, options: .atomic)
+            // The capture is a proof of a friend: it is unreadable while the device
+            // is locked, and it is deleted as soon as it is uploaded (or cancelled).
+            try FileManager.default.writeProtected(data, to: destination)
             return .video(
                 url: destination,
                 fileName: "proof.\(fileExtension)",

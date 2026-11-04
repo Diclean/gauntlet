@@ -84,7 +84,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dares never imports from your photo library — proof has to be filmed live."
+            "value": "Gauntlet never imports from your photo library — the proof has to be filmed live."
           }
         }
       }
@@ -381,7 +381,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Demo invite code: PL4XZ9"
+            "value": "Demo invite code: TRN4XP"
           }
         }
       }
@@ -481,6 +481,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "The server answer could not be read."
+          }
+        }
+      }
+    },
+    "error.forbidden": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You are not allowed to do that."
           }
         }
       }
@@ -1019,7 +1030,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Group settings"
+            "value": "The club"
           }
         }
       }
@@ -1052,7 +1063,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Join my Dares group with the code %@"
+            "value": "Join my club with the code %@"
           }
         }
       }
@@ -1063,7 +1074,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Leave group"
+            "value": "Leave the club"
           }
         }
       }
@@ -1074,7 +1085,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You will not see its challenges any more."
+            "value": "You will not see the fixtures of this club anymore."
           }
         }
       }
@@ -1085,7 +1096,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Leave this group?"
+            "value": "Leave the club?"
           }
         }
       }
@@ -1096,7 +1107,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Members"
+            "value": "Players"
           }
         }
       }
@@ -1118,7 +1129,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Group settings apply from the next week."
+            "value": "Only the owner can change the club."
           }
         }
       }
@@ -1129,7 +1140,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save changes"
+            "value": "Save"
           }
         }
       }
@@ -1206,7 +1217,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dares only works with Sign in with Apple. Your proof photos and videos stay private to your group."
+            "value": "Gauntlet only works with Sign in with Apple. Your proof photos and videos stay private to your group."
           }
         }
       }
@@ -1228,7 +1239,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Weekly Dares"
+            "value": "Weekly Gauntlet"
           }
         }
       }

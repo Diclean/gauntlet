@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// The creation of a club.
 struct CreateGroupView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
@@ -14,58 +15,59 @@ struct CreateGroupView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("group.section.name") {
-                    TextField("group.name.placeholder", text: $name)
-                        .textContentType(.organizationName)
-                }
+            ZStack {
+                Color.ink.ignoresSafeArea()
 
-                Section("group.section.challenges") {
-                    Stepper(value: $challengesPerWeek, in: 3 ... 10) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("New club")
+                            .displayStyle(32)
+                            .foregroundStyle(Color.paper)
+
+                        group("NAME", text: $name, placeholder: "Sunday League FC")
+
                         HStack {
-                            Text("group.challenges_per_week")
-                            Spacer()
-                            Text("\(challengesPerWeek)")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
+                            Text("FIXTURES PER MATCHWEEK")
+                                .labelStyle(8)
+                                .foregroundStyle(Color.paper.opacity(0.7))
+                            Spacer(minLength: 8)
+                            Stepper(value: $challengesPerWeek, in: 3 ... 10) {
+                                Text("\(challengesPerWeek)")
+                                    .font(.anton(16))
+                                    .foregroundStyle(Color.card)
+                            }
+                            .labelsHidden()
                         }
-                    }
-                }
+                        .padding(.horizontal, 12)
+                        .frame(height: 46)
+                        .overlay {
+                            Rectangle().stroke(Color.paper.opacity(0.35), lineWidth: 1.5)
+                        }
 
-                Section("group.section.theme") {
-                    TextField("group.theme.placeholder", text: $theme, axis: .vertical)
-                        .lineLimit(1 ... 3)
-                    Text("group.theme.hint")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                        group("THEME", text: $theme, placeholder: "One kick, one dares")
 
-                Section("group.section.advanced") {
-                    Picker("group.language", selection: $language) {
-                        Text("language.english").tag("en")
-                        Text("language.french").disabled(true).tag("fr")
+                        Text("The theme goes to the club: the fixtures are written in that tone.")
+                            .labelStyle(7.5)
+                            .foregroundStyle(Color.paper.opacity(0.5))
+
+                        group("TIMEZONE", text: $timezone, placeholder: "Europe/Paris")
+
+                        BrutalButton(title: isSubmitting ? "Creating…" : "Create the club", trailing: "→") {
+                            create()
+                        }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
+
+                        Spacer(minLength: 30)
                     }
-                    TextField("group.timezone", text: $timezone)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 12)
                 }
+                .scrollIndicators(.hidden)
             }
-            .navigationTitle("group.create.title")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("action.cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("action.create") { create() }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
-                }
-            }
-            .overlay {
-                if isSubmitting {
-                    ProgressView()
-                        .padding(12)
-                        .background(.regularMaterial, in: .rect(cornerRadius: 10))
+                        .foregroundStyle(Color.card)
                 }
             }
             .alert(
@@ -77,6 +79,23 @@ struct CreateGroupView: View {
                 actions: { Button("alert.ok") { errorMessage = nil } },
                 message: { Text(errorMessage ?? "") }
             )
+        }
+    }
+
+    private func group(_ title: String, text: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .labelStyle(8)
+                .foregroundStyle(Color.paper.opacity(0.7))
+            TextField("", text: text, prompt: Text.gauntletPlaceholder(placeholder, size: 14))
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Color.paper)
+                .tint(Color.card)
+                .padding(.horizontal, 12)
+                .frame(height: 46)
+                .overlay {
+                    Rectangle().stroke(Color.paper.opacity(0.35), lineWidth: 1.5)
+                }
         }
     }
 
@@ -104,7 +123,7 @@ struct CreateGroupView: View {
     }
 }
 
-#Preview("Create group") {
+#Preview("Create club") {
     CreateGroupView()
         .environment(AppState.preview())
 }

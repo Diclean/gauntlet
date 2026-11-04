@@ -4,7 +4,10 @@ enum APIError: LocalizedError, Sendable {
     case invalidURL
     case invalidResponse
     case missingToken
+    /// The server refused the session (401). The token is dead.
     case unauthorized
+    /// The server knows the session but refuses the call (403). The token is still good.
+    case forbidden
     case server(code: String, message: String, status: Int)
     case decoding(String)
     case transport(String)
@@ -19,6 +22,8 @@ enum APIError: LocalizedError, Sendable {
             return String(localized: "error.missing_token")
         case .unauthorized:
             return String(localized: "error.unauthorized")
+        case .forbidden:
+            return String(localized: "error.forbidden")
         case let .server(_, message, _):
             return message
         case .decoding:
@@ -48,16 +53,20 @@ struct APIClient: Sendable {
 
     private let session: URLSession
 
-    init(baseURL: URL, vault: TokenVault) {
+    init(baseURL: URL, vault: TokenVault, session: URLSession? = nil) {
         self.baseURL = baseURL
         self.vault = vault
 
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 120
-        configuration.waitsForConnectivity = true
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        self.session = URLSession(configuration: configuration)
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.default
+            configuration.timeoutIntervalForRequest = 30
+            configuration.timeoutIntervalForResource = 120
+            configuration.waitsForConnectivity = true
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            self.session = URLSession(configuration: configuration)
+        }
     }
 
     // MARK: - Requests
@@ -101,18 +110,37 @@ struct APIClient: Sendable {
     }
 
     /// Absolute URL for a relative media path such as `/media/<key>`.
-    func mediaURL(for path: String) -> URL {
+    ///
+    /// The media of a club never leaves the host of the API: an absolute URL of
+    /// another host is refused, so a hostile payload can never make the app send
+    /// the bearer token to a stranger.
+    func mediaURL(for path: String) throws -> URL {
         if path.hasPrefix("http://") || path.hasPrefix("https://") {
-            return URL(string: path) ?? baseURL
+            guard
+                let url = URL(string: path),
+                url.host == baseURL.host,
+                url.port == baseURL.port,
+                url.scheme?.lowercased() == baseURL.scheme?.lowercased()
+            else {
+                throw APIError.invalidURL
+            }
+            return url
         }
-        return baseURL.appending(path: path)
+        guard path.hasPrefix("/"), !path.contains("..") else {
+            throw APIError.invalidURL
+        }
+        return try makeURL(percentEncodedPath: PathComponent.encodePath(path), query: [])
     }
 
     /// Downloads raw bytes for a media path, using the bearer token.
     func mediaData(for path: String) async throws -> Data {
-        let endpoint = Endpoint(method: .get, path: path)
-        var request = try await makeRequest(for: endpoint)
+        let url = try mediaURL(for: path)
+        guard let token = await vault.currentToken() else {
+            throw APIError.missingToken
+        }
+        var request = URLRequest(url: url)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await session.data(for: request)
         try validate(response: response, data: data)
         return data
@@ -120,17 +148,35 @@ struct APIClient: Sendable {
 
     // MARK: - Helpers
 
+    /// Builds the URL of a request.
+    ///
+    /// The path is already percent encoded (the ids are encoded in `Endpoint`), so
+    /// it is never encoded a second time.
+    private func makeURL(percentEncodedPath path: String, query: [URLQueryItem]) throws -> URL {
+        var base = baseURL.absoluteString
+        while base.hasSuffix("/") {
+            base.removeLast()
+        }
+        let suffix: String
+        if path.isEmpty {
+            suffix = ""
+        } else {
+            suffix = path.hasPrefix("/") ? path : "/" + path
+        }
+        guard var components = URLComponents(string: base + suffix) else {
+            throw APIError.invalidURL
+        }
+        if !query.isEmpty {
+            components.queryItems = query
+        }
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+        return url
+    }
+
     private func makeRequest(for endpoint: Endpoint) async throws -> URLRequest {
-        let url = baseURL.appending(path: endpoint.path)
-        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-            throw APIError.invalidURL
-        }
-        if !endpoint.query.isEmpty {
-            components.queryItems = endpoint.query
-        }
-        guard let finalURL = components.url else {
-            throw APIError.invalidURL
-        }
+        let finalURL = try makeURL(percentEncodedPath: endpoint.path, query: endpoint.query)
 
         var request = URLRequest(url: finalURL)
         request.httpMethod = endpoint.method.rawValue
@@ -152,8 +198,12 @@ struct APIClient: Sendable {
         switch httpResponse.statusCode {
         case 200 ..< 300:
             return
-        case 401, 403:
+        case 401:
+            // The session is dead: the app has to sign in again.
             throw APIError.unauthorized
+        case 403:
+            // The session is good, the call is not allowed.
+            throw APIError.forbidden
         default:
             if let envelope = try? APIJSON.decoder().decode(APIErrorEnvelope.self, from: data) {
                 throw APIError.server(
@@ -217,6 +267,11 @@ extension APIClient: APIClientProtocol {
         try await send(.me, as: MeResponse.self)
     }
 
+    /// `POST /auth/logout` — the server deletes the session of the bearer token.
+    func logout() async throws -> OKResponse {
+        try await send(.logout, as: OKResponse.self)
+    }
+
     func updateProfile(_ request: UpdateMeRequest) async throws -> MeResponse {
         try await send(.updateMe, body: request, as: MeResponse.self)
     }
@@ -271,6 +326,32 @@ extension APIClient: APIClientProtocol {
         try await send(.groupLeaderboard(groupID, scope: scope), as: LeaderboardResponse.self)
     }
 
+    // MARK: v2 — Sunday League
+
+    func race(groupID: String) async throws -> RaceResponse {
+        try await send(.groupRace(groupID), as: RaceResponse.self)
+    }
+
+    func weeks(groupID: String, limit: Int) async throws -> [Week] {
+        try await send(.groupWeeks(groupID, limit: limit), as: WeeksResponse.self).weeks
+    }
+
+    func receipt(groupID: String, weekID: String) async throws -> ReceiptResponse {
+        try await send(.groupReceipt(groupID, weekID: weekID), as: ReceiptResponse.self)
+    }
+
+    func awards(groupID: String, month: String?) async throws -> AwardsResponse {
+        try await send(.groupAwards(groupID, month: month), as: AwardsResponse.self)
+    }
+
+    func awardMonths(groupID: String) async throws -> [String] {
+        try await send(.groupAwardMonths(groupID), as: AwardMonthsResponse.self).months
+    }
+
+    func trophies() async throws -> [Trophy] {
+        try await send(.myTrophies, as: TrophiesResponse.self).trophies
+    }
+
     // MARK: Submissions
 
     func createSubmission(
@@ -305,5 +386,106 @@ extension APIClient: APIClientProtocol {
 
     func vote(submissionID: String, approve: Bool) async throws -> SubmissionResponse {
         try await send(.vote(submissionID), body: VoteRequest(approve: approve), as: SubmissionResponse.self)
+    }
+
+    // MARK: v3 — safety, banter, captain, house fixture
+
+    func acceptTerms() async throws -> MeResponse {
+        try await send(.acceptTerms, as: MeResponse.self)
+    }
+
+    func notificationPrefs() async throws -> NotificationPrefs {
+        try await send(.notificationPrefs, as: NotificationPrefs.self)
+    }
+
+    func updateNotificationPrefs(_ prefs: NotificationPrefs) async throws -> NotificationPrefs {
+        try await send(.updateNotificationPrefs, body: prefs, as: NotificationPrefs.self)
+    }
+
+    func blockedUsers() async throws -> [User] {
+        try await send(.myBlocks, as: BlocksResponse.self).users
+    }
+
+    func blockUser(_ id: String) async throws -> OKResponse {
+        try await send(.blockUser(id), as: OKResponse.self)
+    }
+
+    func unblockUser(_ id: String) async throws -> OKResponse {
+        try await send(.unblockUser(id), as: OKResponse.self)
+    }
+
+    func deleteSubmission(id: String) async throws -> OKResponse {
+        try await send(.deleteSubmission(id), as: OKResponse.self)
+    }
+
+    func reportSubmission(id: String, request: ReportRequest) async throws -> OKResponse {
+        try await send(.reportSubmission(id), body: request, as: OKResponse.self)
+    }
+
+    func reportComment(id: String, request: ReportRequest) async throws -> OKResponse {
+        try await send(.reportComment(id), body: request, as: OKResponse.self)
+    }
+
+    func deleteComment(id: String) async throws -> OKResponse {
+        try await send(.deleteComment(id), as: OKResponse.self)
+    }
+
+    func comments(submissionID: String) async throws -> [Comment] {
+        try await send(.comments(submissionID), as: CommentsResponse.self).comments
+    }
+
+    func addComment(submissionID: String, text: String) async throws -> Comment {
+        let response = try await send(
+            .addComment(submissionID),
+            body: CommentRequest(text: text),
+            as: CommentResponse.self
+        )
+        return response.comment
+    }
+
+    func toggleReaction(submissionID: String, emoji: ReactionEmoji) async throws -> Submission {
+        let response = try await send(
+            .reactions(submissionID),
+            body: ReactionRequest(emoji: emoji.rawValue),
+            as: SubmissionResponse.self
+        )
+        return response.submission
+    }
+
+    func vetoChallenge(id: String) async throws -> VetoResponse {
+        try await send(.vetoChallenge(id), as: VetoResponse.self)
+    }
+
+    func setCaptain(groupID: String, challengeID: String) async throws -> CaptainResponse {
+        try await send(
+            .setCaptain(groupID: groupID),
+            body: CaptainRequest(challengeId: challengeID),
+            as: CaptainResponse.self
+        )
+    }
+
+    func addHouseFixture(groupID: String, request: HouseFixtureRequest) async throws -> Challenge {
+        let response = try await send(
+            .addHouseFixture(groupID: groupID),
+            body: request,
+            as: ChallengeResponse.self
+        )
+        return response.challenge
+    }
+
+    func removeMember(groupID: String, userID: String) async throws -> OKResponse {
+        try await send(.removeMember(groupID: groupID, userID: userID), as: OKResponse.self)
+    }
+
+    func bannedMembers(groupID: String) async throws -> [BannedMember] {
+        try await send(.bans(groupID: groupID), as: BannedMembersResponse.self).users
+    }
+
+    func unbanMember(groupID: String, userID: String) async throws -> OKResponse {
+        try await send(.unbanMember(groupID: groupID, userID: userID), as: OKResponse.self)
+    }
+
+    func joinPreview(code: String) async throws -> Group {
+        try await send(.joinPreview(code: code), as: JoinPreviewResponse.self).group
     }
 }

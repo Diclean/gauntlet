@@ -13,7 +13,7 @@ actor DemoAPIClient: APIClientProtocol {
 
     init(now: Date = Date(), autoSimulate: Bool = true, simulationDelay: TimeInterval = 3) {
         var store = DemoStore()
-        store.seed(now: now)
+        store.seed(now: now, simulationDelay: simulationDelay)
         self.store = store
         self.autoSimulate = autoSimulate
         self.simulationDelay = simulationDelay
@@ -32,6 +32,11 @@ actor DemoAPIClient: APIClientProtocol {
             throw APIError.server(code: "no_user", message: "This demo account is gone.", status: 404)
         }
         return MeResponse(user: user)
+    }
+
+    /// The demo has no server and no session to delete.
+    func logout() async throws -> OKResponse {
+        OKResponse(ok: true)
     }
 
     func updateProfile(_ request: UpdateMeRequest) async throws -> MeResponse {
@@ -99,12 +104,13 @@ actor DemoAPIClient: APIClientProtocol {
 
     func currentWeek(groupID: String) async throws -> WeekResponse {
         startSimulationsIfNeeded()
-        guard let week = store.week(of: groupID) else {
+        guard let week = store.apiWeek(groupID: groupID, viewerID: store.currentUserID) else {
             throw APIError.server(code: "not_found", message: "That group does not exist.", status: 404)
         }
         return WeekResponse(
             week: week,
-            challenges: store.challenges(groupID: groupID, viewerID: store.currentUserID)
+            challenges: store.challenges(groupID: groupID, viewerID: store.currentUserID),
+            houseFixture: store.houseFixtureInfo(groupID: groupID, viewerID: store.currentUserID)
         )
     }
 
@@ -123,6 +129,50 @@ actor DemoAPIClient: APIClientProtocol {
         startSimulationsIfNeeded()
         let entries = store.leaderboard(groupID: groupID, scope: scope)
         return LeaderboardResponse(entries: entries)
+    }
+
+    // MARK: - v2: Sunday League
+
+    func race(groupID: String) async throws -> RaceResponse {
+        startSimulationsIfNeeded()
+        return store.race(groupID: groupID, viewerID: store.currentUserID)
+    }
+
+    func weeks(groupID: String, limit: Int) async throws -> [Week] {
+        startSimulationsIfNeeded()
+        let list = store.weeks[groupID] ?? []
+        return Array(list.suffix(limit).reversed())
+    }
+
+    func receipt(groupID: String, weekID: String) async throws -> ReceiptResponse {
+        startSimulationsIfNeeded()
+        guard let receipt = store.receipt(
+            groupID: groupID,
+            weekID: weekID,
+            viewerID: store.currentUserID
+        ) else {
+            throw APIError.server(
+                code: "not_found",
+                message: "That matchweek does not exist.",
+                status: 404
+            )
+        }
+        return receipt
+    }
+
+    func awards(groupID: String, month: String?) async throws -> AwardsResponse {
+        startSimulationsIfNeeded()
+        return store.awards(groupID: groupID, month: month)
+    }
+
+    func awardMonths(groupID: String) async throws -> [String] {
+        startSimulationsIfNeeded()
+        return store.awardMonthList()
+    }
+
+    func trophies() async throws -> [Trophy] {
+        startSimulationsIfNeeded()
+        return store.trophies(userID: store.currentUserID)
     }
 
     // MARK: - Submissions
@@ -172,6 +222,149 @@ actor DemoAPIClient: APIClientProtocol {
             message: "The demo media could not be found.",
             status: 404
         )
+    }
+
+    // MARK: - v3: safety, banter, captain, house fixture
+
+    func acceptTerms() async throws -> MeResponse {
+        let user = store.acceptTerms()
+        return MeResponse(user: user)
+    }
+
+    func notificationPrefs() async throws -> NotificationPrefs {
+        store.notificationPrefs(for: store.currentUserID)
+    }
+
+    func updateNotificationPrefs(_ prefs: NotificationPrefs) async throws -> NotificationPrefs {
+        store.notificationPrefs[store.currentUserID] = prefs
+        return prefs
+    }
+
+    func blockedUsers() async throws -> [User] {
+        store.blockedUsers(for: store.currentUserID)
+    }
+
+    func blockUser(_ id: String) async throws -> OKResponse {
+        store.block(userID: id, by: store.currentUserID)
+        return OKResponse(ok: true)
+    }
+
+    func unblockUser(_ id: String) async throws -> OKResponse {
+        store.unblock(userID: id, by: store.currentUserID)
+        return OKResponse(ok: true)
+    }
+
+    func deleteSubmission(id: String) async throws -> OKResponse {
+        try store.deleteSubmission(id: id, by: store.currentUserID)
+        return OKResponse(ok: true)
+    }
+
+    func reportSubmission(id: String, request: ReportRequest) async throws -> OKResponse {
+        try store.report(
+            targetType: .submission,
+            targetID: id,
+            reporterID: store.currentUserID,
+            reason: request.reason,
+            note: request.note,
+            groupID: store.submission(id: id)?.groupID ?? ""
+        )
+        return OKResponse(ok: true)
+    }
+
+    func reportComment(id: String, request: ReportRequest) async throws -> OKResponse {
+        let groupID = store.groupID(ofComment: id) ?? ""
+        try store.report(
+            targetType: .comment,
+            targetID: id,
+            reporterID: store.currentUserID,
+            reason: request.reason,
+            note: request.note,
+            groupID: groupID
+        )
+        return OKResponse(ok: true)
+    }
+
+    func deleteComment(id: String) async throws -> OKResponse {
+        try store.deleteComment(id: id, by: store.currentUserID)
+        return OKResponse(ok: true)
+    }
+
+    func comments(submissionID: String) async throws -> [Comment] {
+        let groupID = store.submission(id: submissionID)?.groupID ?? ""
+        return store.commentList(submissionID: submissionID, viewerID: store.currentUserID, groupID: groupID)
+    }
+
+    func addComment(submissionID: String, text: String) async throws -> Comment {
+        let comment = try store.addComment(
+            submissionID: submissionID,
+            text: text,
+            userID: store.currentUserID
+        )
+        guard let user = store.user(id: comment.userID) else {
+            throw APIError.server(code: "not_found", message: "That comment does not exist.", status: 404)
+        }
+        let groupID = store.submission(id: submissionID)?.groupID ?? ""
+        let ownerID = store.ownerID(of: groupID)
+        return Comment(
+            id: comment.id,
+            user: user,
+            text: comment.text,
+            createdAt: comment.createdAt,
+            canDelete: comment.userID == store.currentUserID || ownerID == store.currentUserID
+        )
+    }
+
+    func toggleReaction(submissionID: String, emoji: ReactionEmoji) async throws -> Submission {
+        let submission = try store.toggleReaction(
+            submissionID: submissionID,
+            emoji: emoji,
+            userID: store.currentUserID
+        )
+        return store.makeSubmission(submission, viewerID: store.currentUserID)
+    }
+
+    func vetoChallenge(id: String) async throws -> VetoResponse {
+        let result = try store.veto(challengeID: id, by: store.currentUserID)
+        return VetoResponse(challenge: result.challenge, replaced: result.replaced)
+    }
+
+    func setCaptain(groupID: String, challengeID: String) async throws -> CaptainResponse {
+        let week = try store.setCaptain(groupID: groupID, challengeID: challengeID, by: store.currentUserID)
+        let challenge = store.challenges(groupID: groupID, viewerID: store.currentUserID)
+            .first { $0.id == challengeID }
+        return CaptainResponse(week: week, challenge: challenge)
+    }
+
+    func addHouseFixture(groupID: String, request: HouseFixtureRequest) async throws -> Challenge {
+        try store.addHouseFixture(groupID: groupID, request: request, by: store.currentUserID)
+    }
+
+    func removeMember(groupID: String, userID: String) async throws -> OKResponse {
+        try store.removeMember(groupID: groupID, userID: userID, by: store.currentUserID)
+        return OKResponse(ok: true)
+    }
+
+    func bannedMembers(groupID: String) async throws -> [BannedMember] {
+        store.bannedMembers(groupID: groupID)
+    }
+
+    func unbanMember(groupID: String, userID: String) async throws -> OKResponse {
+        try store.unbanMember(groupID: groupID, userID: userID, by: store.currentUserID)
+        return OKResponse(ok: true)
+    }
+
+    func joinPreview(code: String) async throws -> Group {
+        let wanted = code.uppercased()
+        guard let id = store.groups.values.first(where: { $0.inviteCode.uppercased() == wanted })?.id,
+              let group = store.group(id: id)
+        else {
+            throw APIError.server(
+                code: "not_found",
+                message: "That invite code does not match any club.",
+                status: 404
+            )
+        }
+        return group
     }
 
     // MARK: - Simulated votes

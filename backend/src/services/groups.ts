@@ -1,4 +1,12 @@
-import type { GroupJson, GroupMemberRow, GroupRow, MemberJson, WeekJson, WeekRow } from '../types';
+import type {
+  BannedUserJson,
+  GroupJson,
+  GroupMemberRow,
+  GroupRow,
+  MemberJson,
+  WeekJson,
+  WeekRow,
+} from '../types';
 import { toPublicUser } from '../types';
 import { all, first } from '../lib/db';
 import { forbidden, notFound } from '../lib/errors';
@@ -9,6 +17,10 @@ const INVITE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789';
 const MAX_MEMBERS = 30;
 
 export const GROUP_MAX_MEMBERS = MAX_MEMBERS;
+
+/** Default, display-only club forfeit (SPEC §5). */
+export const DEFAULT_FORFEIT = 'Buys the round 🍺';
+export const MAX_FORFEIT_LENGTH = 60;
 
 export function generateInviteCode(): string {
   let code = '';
@@ -73,11 +85,24 @@ export async function countMembers(db: D1Database, groupId: string): Promise<num
   return row?.count ?? 0;
 }
 
-export async function groupJson(db: D1Database, group: GroupRow): Promise<GroupJson> {
-  return groupJsonWithCount(group, await countMembers(db, group.id));
+export function inviteUrlFor(inviteCode: string, publicBaseUrl?: string): string {
+  const base = (publicBaseUrl ?? '').trim().replace(/\/+$/u, '');
+  return `${base}/join/${inviteCode}`;
 }
 
-export function groupJsonWithCount(group: GroupRow, memberCount: number): GroupJson {
+export async function groupJson(
+  db: D1Database,
+  group: GroupRow,
+  publicBaseUrl?: string,
+): Promise<GroupJson> {
+  return groupJsonWithCount(group, await countMembers(db, group.id), publicBaseUrl);
+}
+
+export function groupJsonWithCount(
+  group: GroupRow,
+  memberCount: number,
+  publicBaseUrl?: string,
+): GroupJson {
   return {
     id: group.id,
     name: group.name,
@@ -88,6 +113,8 @@ export function groupJsonWithCount(group: GroupRow, memberCount: number): GroupJ
     timezone: group.timezone,
     ownerId: group.owner_id,
     memberCount,
+    forfeit: group.forfeit ?? DEFAULT_FORFEIT,
+    inviteUrl: inviteUrlFor(group.invite_code, publicBaseUrl),
   };
 }
 
@@ -116,12 +143,105 @@ export async function listMembers(db: D1Database, groupId: string): Promise<Memb
   }));
 }
 
-export function weekJson(week: WeekRow): WeekJson {
+/** Club members banned (removed) by the owner, newest ban first. */
+export async function listBans(db: D1Database, groupId: string): Promise<BannedUserJson[]> {
+  const rows = await all<{
+    id: string;
+    display_name: string;
+    avatar_emoji: string | null;
+    banned_at: number;
+  }>(
+    db
+      .prepare(
+        `SELECT u.id, u.display_name, u.avatar_emoji, b.created_at AS banned_at
+           FROM group_bans b
+           JOIN users u ON u.id = b.user_id
+          WHERE b.group_id = ?
+          ORDER BY b.created_at DESC, u.id ASC`,
+      )
+      .bind(groupId),
+  );
+  return rows.map((row) => ({
+    ...toPublicUser({
+      id: row.id,
+      apple_sub: '',
+      display_name: row.display_name,
+      avatar_emoji: row.avatar_emoji,
+      created_at: 0,
+    }),
+    bannedAt: row.banned_at,
+  }));
+}
+
+/**
+ * Fixtures this club already replaced this week. A replacement marks the old
+ * challenge with `replaced_by`, so the count is also the veto limit counter.
+ */
+export async function countWeekReplacements(
+  db: D1Database,
+  weekId: string,
+): Promise<number> {
+  const row = await first<{ count: number }>(
+    db
+      .prepare(
+        'SELECT COUNT(*) AS count FROM challenges WHERE week_id = ? AND replaced_by IS NOT NULL',
+      )
+      .bind(weekId),
+  );
+  return row?.count ?? 0;
+}
+
+/** Batched `countWeekReplacements` for the weeks list. */
+export async function replacementsForWeeks(
+  db: D1Database,
+  weekIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (weekIds.length === 0) return new Map();
+  const placeholders = weekIds.map(() => '?').join(', ');
+  const rows = await all<{ week_id: string; count: number }>(
+    db
+      .prepare(
+        `SELECT week_id, COUNT(*) AS count FROM challenges
+          WHERE week_id IN (${placeholders}) AND replaced_by IS NOT NULL
+          GROUP BY week_id`,
+      )
+      .bind(...weekIds),
+  );
+  return new Map(rows.map((row) => [row.week_id, row.count]));
+}
+
+export function weekJson(
+  week: WeekRow,
+  myCaptainChallengeId: string | null,
+  vetoesUsed: number,
+): WeekJson {
   return {
     id: week.id,
+    number: week.number,
     startsAt: week.starts_at,
     endsAt: week.ends_at,
     voteDeadline: week.vote_deadline,
     status: week.status,
+    myCaptainChallengeId,
+    vetoesUsed,
   };
+}
+
+/** The caller's captain fixture per week, for `Week.myCaptainChallengeId`. */
+export async function captainMapForWeeks(
+  db: D1Database,
+  weekIds: readonly string[],
+  userId: string,
+): Promise<Map<string, string>> {
+  if (weekIds.length === 0) return new Map();
+  const placeholders = weekIds.map(() => '?').join(', ');
+  const rows = await all<{ week_id: string; challenge_id: string }>(
+    db
+      .prepare(
+        `SELECT week_id, challenge_id FROM captains
+          WHERE user_id = ? AND week_id IN (${placeholders})`,
+      )
+      .bind(userId, ...weekIds),
+  );
+  return new Map(rows.map((row) => [row.week_id, row.challenge_id]));
 }

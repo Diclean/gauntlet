@@ -4,10 +4,11 @@ import type { AppEnv, UserRow } from '../types';
 import { toPublicUser } from '../types';
 import { first, nowSeconds } from '../lib/db';
 import { randomId } from '../lib/crypto';
-import { createSession } from '../auth/session';
+import { createSession, deleteSession } from '../auth/session';
 import { verifyAppleIdentityToken } from '../auth/apple';
 import { parseJsonBody } from '../middleware/validate';
 import { rateLimit } from '../middleware/rate-limit';
+import { requireAuth } from '../middleware/auth';
 
 const app = new Hono<AppEnv>();
 
@@ -46,6 +47,17 @@ app.post(
 
     const session = await createSession(c.env.DB, user.id, now);
     return c.json({ token: session.token, user: toPublicUser(user) });
+  },
+);
+
+/** POST /auth/logout — deletes only the presented session row. */
+app.post(
+  '/logout',
+  requireAuth,
+  rateLimit({ bucket: 'auth-logout', capacity: 60, refillPerSecond: 1, by: 'user' }),
+  async (c) => {
+    await deleteSession(c.env.DB, c.get('sessionTokenHash'));
+    return c.json({ ok: true });
   },
 );
 

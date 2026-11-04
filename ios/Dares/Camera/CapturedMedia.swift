@@ -19,6 +19,15 @@ enum CapturedMedia: Sendable {
         case let .video(url, _, _): (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
         }
     }
+
+    /// Deletes the file of a captured video.
+    ///
+    /// A capture only lives on the disk until it is uploaded: the file never stays in
+    /// the temporary directory of the app (a photo lives in the memory only).
+    func discard() {
+        guard case let .video(url, _, _) = self else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
 }
 
 enum CaptureError: LocalizedError, Sendable {

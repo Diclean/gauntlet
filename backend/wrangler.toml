@@ -24,3 +24,8 @@ crons = ["0 * * * *"]
 APPLE_BUNDLE_ID = "com.mathys.dares"
 APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 APNS_ENV = "production"
+
+# v3: public invite links + universal links. Replace before deploying.
+PUBLIC_BASE_URL = "https://dares.example.workers.dev"
+APPLE_TEAM_ID = "XXXXXXXXXX"
+TESTFLIGHT_URL = "https://testflight.apple.com/join/XXXXXXXX"

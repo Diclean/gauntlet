@@ -11,6 +11,7 @@ import {
   membersWithChallengesLeft,
 } from './services/weeks';
 import { pushDeadlineReminder, pushNewWeek } from './push';
+import { maybeRunMonthlyAwards } from './services/awards';
 
 /**
  * Hourly cron:
@@ -21,13 +22,16 @@ import { pushDeadlineReminder, pushNewWeek } from './push';
  *  3. Expire pending submissions whose deadline passed.
  *  4. Sunday >= 18:00 local: one "X challenges left" push per member, then
  *     mark reminder_sent so retries do not spam.
+ *  5. First Monday of the month >= 19:00 local: compute the previous month's
+ *     awards from every week starting in it (one-shot per group/month), ledger
+ *     +50 for Player of the Month, push once.
  *
  * Note: weekly-winner/streak awards happen at the vote deadline rather than at
  * Monday 00:00 so votes cast during the grace period still count. Weeks are
  * still marked closed at rollover, and the awards are idempotent.
  */
 export async function runCron(env: Env, now: number = nowSeconds()): Promise<void> {
-  await expirePastDeadlineSubmissions(env.DB, now);
+  await expirePastDeadlineSubmissions(env, now);
 
   const groups = await all<GroupRow>(env.DB.prepare('SELECT * FROM groups ORDER BY created_at ASC'));
 
@@ -62,6 +66,16 @@ async function processGroup(env: Env, group: GroupRow, now: number): Promise<voi
   }
 
   await finalizeDueWeeks(env, group, now);
+
+  // Monthly "Awards night": first Monday of the month, 19:00 group-local,
+  // previous month. The run guard makes later ticks no-ops.
+  try {
+    await maybeRunMonthlyAwards(env, group, now);
+  } catch (error) {
+    console.error('monthly_awards_failed', {
+      name: error instanceof Error ? error.name : 'Error',
+    });
+  }
 
   if (isReminderWindow(now, group.timezone) && current.reminder_sent === 0) {
     const marked = await env.DB.prepare(

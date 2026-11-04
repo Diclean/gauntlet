@@ -1,0 +1,349 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gauntlet — approved screens (v2 Sunday League)</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet">
+<!-- APPROVED DESIGN REFERENCE. 8 screens. Match tokens, type, borders, rotations, copy. See DESIGN.md for rules. -->
+<style>
+:root{--y:#FFD60A;--r:#E5202E;--g:#00C46A;--k:#0B0B0C;--w:#FFFFFF;--fl:#FF6B00;--mono:ui-monospace,"SF Mono",Menlo,monospace;--sys:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#d9d9d4;padding:24px}
+.strip{display:flex;flex-wrap:wrap;gap:24px}
+.cell{flex:0 0 300px}
+.cap{font:600 11px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#555;margin-top:10px;text-align:center}
+.ph{width:300px;height:640px;border-radius:44px;background:#000;padding:7px;box-shadow:0 0 0 1.5px #3a3a3e}
+.s{height:100%;border-radius:38px;overflow:hidden;position:relative;font-family:var(--sys)}
+.sb{display:flex;justify-content:space-between;align-items:center;padding:14px 26px 0;font:600 13px/1 var(--sys);height:40px}
+.island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:86px;height:24px;border-radius:14px;background:#000}
+.A{font-family:Anton,Impact,sans-serif;text-transform:uppercase;letter-spacing:.005em;line-height:.92}
+.photo{background:radial-gradient(circle at 30% 35%,#ffcf7a 0 18%,transparent 19%),radial-gradient(circle at 68% 62%,#c8562c 0 22%,transparent 23%),radial-gradient(circle at 40% 70%,#7a9b3b 0 12%,transparent 13%),linear-gradient(160deg,#3b2a20,#8a5a36 55%,#2a1d16);position:relative}
+.photo::after{content:"🍲";position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);font-size:64px}
+.tabs{position:absolute;left:10px;right:10px;bottom:10px;height:54px;border-radius:27px;display:flex;align-items:center;justify-content:space-around;font:700 9px/1 var(--mono);letter-spacing:.1em}
+.tab{display:flex;flex-direction:column;align-items:center;gap:5px;opacity:.55}
+.tab i{display:block;width:18px;height:18px;border:2px solid currentColor;border-radius:3px}
+.tab.on{opacity:1}
+.badge{position:relative}
+.badge em{position:absolute;top:-6px;right:-9px;background:var(--r);color:#fff;font:700 8px/1 var(--mono);padding:3px 4px;border-radius:8px;font-style:normal}
+.dark .tabs{background:#1b1b1d;color:#fff;border:1.5px solid #ffffff22}
+.dark .tab.on{color:var(--y)}
+/* 1 MATCHDAY */
+.s1{background:var(--k);color:var(--w)}
+.club{display:flex;align-items:center;gap:8px;padding:6px 18px 0}
+.crest{width:24px;height:28px;background:var(--y);color:var(--k);clip-path:polygon(0 0,100% 0,100% 62%,50% 100%,0 62%);display:grid;place-items:center;font:400 10px Anton}
+.club b{font:700 10px/1 var(--mono);letter-spacing:.12em}
+.club span{margin-left:auto;font-size:20px}
+.mw{padding:10px 18px 0;display:flex;align-items:flex-end;gap:10px}
+.mw .A{font-size:44px}
+.mw .num{color:var(--y)}
+.board{margin:10px 18px 0;border:2px solid #fff;display:grid;grid-template-columns:1.35fr 1fr .8fr}
+.board div{padding:7px 9px;border-right:2px solid #fff}
+.board div:last-child{border:0}
+.board small{display:block;font:700 7.5px/1 var(--mono);letter-spacing:.12em;opacity:.6;margin-bottom:5px;white-space:nowrap}
+.board b{font:400 20px/1 Anton;letter-spacing:.02em;white-space:nowrap}
+.board .yy{color:var(--y)}
+.fx{margin:8px 0 0;padding:0 18px}
+.row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1.5px solid #ffffff26}
+.row .n{font:400 22px/1 Anton;width:28px;color:transparent;-webkit-text-stroke:1.2px #fff}
+.row .t{flex:1;min-width:0}
+.row .t b{font:400 14px/1.05 Anton;text-transform:uppercase;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .t small{font:600 8.5px/1 var(--mono);letter-spacing:.08em;opacity:.6}
+.pill{font:700 8.5px/1 var(--mono);letter-spacing:.1em;padding:5px 6px;border:1.5px solid #fff;white-space:nowrap}
+.p-ft{background:var(--g);border-color:var(--g);color:var(--k)}
+.p-var{background:var(--y);border-color:var(--y);color:var(--k)}
+.p-red{background:var(--r);border-color:var(--r);color:#fff}
+.cta{position:absolute;left:18px;right:18px;bottom:76px;height:48px;background:var(--y);color:var(--k);border:2px solid #fff;box-shadow:4px 4px 0 #fff;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font:400 19px/1 Anton;text-transform:uppercase}
+/* 2 VAR */
+.s2{background:#111;color:#fff}
+.varh{display:flex;align-items:center;justify-content:space-between;padding:8px 18px 0}
+.varh .A{font-size:30px}
+.live{font:700 9px/1 var(--mono);letter-spacing:.12em;display:flex;align-items:center;gap:6px;border:1.5px solid #fff;padding:5px 7px}
+.live i{width:7px;height:7px;background:var(--r);border-radius:50%}
+.card{position:absolute;left:22px;right:22px;top:104px;height:350px;border:2px solid #fff;transform:rotate(5deg) translateX(14px);box-shadow:6px 6px 0 #000;overflow:hidden}
+.card .photo{position:absolute;inset:0}
+.card2{position:absolute;left:22px;right:22px;top:108px;height:350px;border:2px solid #ffffff55;background:#222;transform:rotate(-3deg)}
+.stamp{position:absolute;z-index:2;top:22px;left:14px;font:400 40px/1 Anton;color:var(--g);border:4px double var(--g);padding:4px 10px 2px;transform:rotate(-14deg);background:#0b0b0c66;letter-spacing:.04em}
+.cardinfo{position:absolute;z-index:2;left:0;right:0;bottom:0;padding:44px 12px 12px;background:linear-gradient(transparent,#000d);color:#fff}
+.cardinfo .who{font:700 10px/1 var(--mono);letter-spacing:.1em;margin-bottom:6px}
+.cardinfo b{font:400 19px/1 Anton;text-transform:uppercase;display:block;margin-bottom:5px}
+.cardinfo p{font:500 12px/1.3 var(--sys);opacity:.9}
+.calls{position:absolute;left:18px;right:18px;bottom:84px;display:flex;gap:12px}
+.call{flex:1;height:56px;border:2px solid #fff;display:flex;align-items:center;justify-content:center;gap:8px;font:400 19px/1 Anton;text-transform:uppercase}
+.call .cd{width:14px;height:20px;border-radius:2px;background:#fff;border:1.5px solid #0004}
+.nogo{background:var(--r);color:#fff;transform:rotate(-2deg)}
+.go{background:var(--g);color:var(--k);transform:rotate(2deg)}
+.swipe{position:absolute;left:0;right:0;bottom:152px;text-align:center;font:700 8px/1 var(--mono);letter-spacing:.16em;color:#fff9}
+/* 3 GOAL */
+.s3{background:var(--g);color:var(--k)}
+.goal{position:absolute;top:84px;left:0;right:0;text-align:center;font:400 118px/.85 Anton;transform:rotate(-5deg);letter-spacing:-.01em}
+.goal span{display:block;font-size:22px;letter-spacing:.06em;margin-top:6px}
+.polar{position:absolute;top:262px;left:50%;width:150px;height:176px;margin-left:-75px;background:#fff;padding:7px 7px 26px;transform:rotate(4deg);box-shadow:5px 5px 0 var(--k);border:2px solid var(--k)}
+.polar .photo{height:100%}
+.polar .photo::after{font-size:40px}
+.polar small{position:absolute;bottom:8px;left:0;right:0;text-align:center;font:700 7.5px/1 var(--mono);letter-spacing:.06em}
+.plus{position:absolute;top:252px;right:22px;background:var(--y);border:2px solid var(--k);font:400 30px/1 Anton;padding:6px 8px;transform:rotate(8deg);box-shadow:3px 3px 0 var(--k)}
+.conf{position:absolute;top:462px;left:22px;right:22px;font:700 10px/1.5 var(--mono);letter-spacing:.08em;text-align:center}
+.bonus{position:absolute;top:504px;left:22px;right:22px;display:flex;gap:8px}
+.bonus div{flex:1;background:var(--k);color:var(--y);font:400 13px/1 Anton;text-transform:uppercase;padding:9px 6px;text-align:center;border:2px solid var(--k)}
+.bonus div:last-child{background:var(--y);color:var(--k)}
+.back{position:absolute;left:22px;right:22px;bottom:30px;height:46px;background:var(--k);color:#fff;display:flex;align-items:center;justify-content:center;font:400 17px/1 Anton;text-transform:uppercase;letter-spacing:.03em}
+/* 4 TABLE */
+.s4{background:#fff;color:var(--k)}
+.s4 .tabs{background:#f1f1ef;border:1.5px solid #0b0b0c1a}
+.th{padding:8px 16px 0}
+.th .A{font-size:42px}
+.seg{display:flex;border:2px solid var(--k);margin:8px 16px 0}
+.seg div{flex:1;text-align:center;font:700 9px/1 var(--mono);letter-spacing:.12em;padding:7px 0}
+.seg .on{background:var(--k);color:#fff}
+table{width:calc(100% - 20px);margin:10px 10px 0;border-collapse:collapse;table-layout:fixed;font:600 11px/1 var(--sys)}
+col.c1{width:22px}col.c3{width:22px}col.c4{width:72px}col.c5{width:36px}
+th{font:700 8px/1 var(--mono);letter-spacing:.1em;text-align:left;padding:0 3px 6px;opacity:.55}
+td{padding:7px 3px;border-top:1.5px solid #0b0b0c1f;white-space:nowrap;overflow:hidden}
+td.pos{font:400 18px/1 Anton}
+td.pl b{font:400 14px/1 Anton;text-transform:uppercase;letter-spacing:.02em}
+td.pt{font:400 17px/1 Anton;text-align:right}
+.mv{font:700 8px/1 var(--mono);display:block;margin-top:3px}
+.up{color:#00a65a}.dn{color:var(--r)}
+.form{display:flex;gap:2px}
+.form i{width:12px;height:12px;font:700 7px/12px var(--mono);text-align:center;font-style:normal;color:#fff}
+.W{background:var(--g)}.L{background:var(--r)}.D{background:#b9b9b9}
+tr.lead td{background:var(--y)}
+tr.rel td{background:#fde4e6}
+.relz{font:700 8px/1 var(--mono);letter-spacing:.1em;color:var(--r);padding:8px 4px 4px;border-top:2px dashed var(--r);margin:4px 10px 0}
+.clubform{margin:10px 16px 0;border:2px solid var(--k);padding:8px 10px;display:flex;justify-content:space-between;align-items:center;box-shadow:3px 3px 0 var(--k)}
+.clubform small{font:700 8px/1.3 var(--mono);letter-spacing:.1em}
+.clubform b{font:400 20px/1 Anton;color:var(--fl)}
+/* 5 RECEIPT */
+.s5{background:#1c1c1e;color:#fff}
+.rc{position:absolute;top:48px;left:18px;right:18px;background:#fbfbf7;color:#111;font:500 9.5px/1.45 var(--mono);padding:14px 13px 16px;
+ -webkit-mask:radial-gradient(circle at 6px 0,transparent 5px,#000 5.5px) top/12px 51% repeat-x,radial-gradient(circle at 6px 100%,transparent 5px,#000 5.5px) bottom/12px 51% repeat-x;
+ mask:radial-gradient(circle at 6px 0,transparent 5px,#000 5.5px) top/12px 51% repeat-x,radial-gradient(circle at 6px 100%,transparent 5px,#000 5.5px) bottom/12px 51% repeat-x}
+.rc .c{text-align:center}
+.rc h3{font:400 25px/1 Anton;letter-spacing:.02em;margin:2px 0}
+.rc .dash{border-top:1.5px dashed #111;margin:7px 0}
+.rc .l{display:flex;justify-content:space-between;gap:6px}
+.rc .l span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc .tot{font:400 22px/1 Anton;display:flex;justify-content:space-between;margin-top:2px}
+.rc .x{color:#888;text-decoration:line-through}
+.rc .motm{background:#111;color:var(--y);padding:6px 8px;margin:7px 0 4px;display:flex;justify-content:space-between;font-weight:700}
+.rc .spoon{border:1.5px solid #111;padding:6px 8px;display:flex;justify-content:space-between;font-weight:700}
+.bar{height:30px;margin:9px 0 4px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 3px,#111 3px 4px,transparent 4px 7px,#111 7px 10px,transparent 10px 11px)}
+.share{position:absolute;left:18px;right:18px;bottom:22px;height:46px;background:var(--y);border:2px solid #fff;box-shadow:4px 4px 0 #fff;display:flex;align-items:center;justify-content:center;font:400 17px/1 Anton;text-transform:uppercase;color:var(--k)}
+/* 6 TITLE RACE */
+.s6{background:var(--k);color:#fff}
+.hd{padding:8px 16px 0;display:flex;justify-content:space-between;align-items:flex-end}
+.hd .A{font-size:38px}
+.hd small{font:700 8px/1.3 var(--mono);letter-spacing:.12em;opacity:.6;text-align:right}
+.seg.inv{border-color:#fff}
+.seg.inv .on{background:#fff;color:var(--k)}
+.chart{margin:10px 8px 0 14px;position:relative}
+.chart svg{display:block}
+.ax{font:700 7.5px var(--mono);letter-spacing:.06em;fill:#ffffff80}
+.lbl{font:400 11px Anton;letter-spacing:.03em}
+.note{font:700 7.5px var(--mono);letter-spacing:.08em}
+.tip{position:absolute;left:4px;top:22px;background:#fff;color:var(--k);border:2px solid var(--k);box-shadow:3px 3px 0 var(--y);padding:6px 7px;font:700 8px/1.45 var(--mono);letter-spacing:.06em}
+.tip b{font:400 13px/1 Anton;display:block;letter-spacing:.02em}
+.wk{margin:4px 16px 0}
+.wk h4{font:700 8px/1 var(--mono);letter-spacing:.12em;opacity:.6;margin-bottom:6px}
+.bars{display:flex;align-items:flex-end;gap:4px;height:56px;border-bottom:1.5px solid #ffffff40}
+.bars div{flex:1;background:#ffffff38;border-radius:3px 3px 0 0;position:relative}
+.bars .best{background:var(--y)}
+.bars .best::after{content:"115";position:absolute;top:-13px;left:50%;transform:translateX(-50%);font:400 11px Anton;color:var(--y)}
+.bx{display:flex;justify-content:space-between;font:700 7px var(--mono);opacity:.5;margin-top:4px;letter-spacing:.04em}
+.chips{display:flex;gap:6px;margin:10px 16px 0}
+.chips div{flex:1;border:2px solid #fff;padding:6px 6px}
+.chips small{display:block;font:700 7px/1 var(--mono);letter-spacing:.1em;opacity:.6;margin-bottom:4px}
+.chips b{font:400 17px/1 Anton}
+.chips .f{color:var(--fl)}
+/* 7 AWARDS NIGHT */
+.s7{background:var(--k);color:#fff}
+.aw{padding:10px 18px 0}
+.aw small{font:700 8.5px/1 var(--mono);letter-spacing:.16em;color:var(--y)}
+.aw .A{font-size:52px;margin-top:6px}
+.aw .A span{color:transparent;-webkit-text-stroke:1.5px #fff}
+.prog{display:flex;gap:4px;margin:12px 18px 0}
+.prog i{flex:1;height:5px;background:#ffffff30}
+.prog i.d{background:var(--y)}
+.env{position:absolute;left:24px;right:24px;top:196px;height:208px;background:var(--y);color:var(--k);border:2px solid #fff;box-shadow:6px 6px 0 #fff;transform:rotate(-2deg)}
+.env::before{content:"";position:absolute;left:0;right:0;top:0;height:84px;background:#e8c000;clip-path:polygon(0 0,100% 0,50% 100%)}
+.seal{position:absolute;left:50%;top:60px;width:44px;height:44px;margin-left:-22px;border-radius:50%;background:var(--k);color:var(--y);display:grid;place-items:center;font:400 13px Anton;box-shadow:0 0 0 3px var(--y)}
+.env .cat{position:absolute;left:0;right:0;top:114px;text-align:center}
+.env .cat small{font:700 8px/1 var(--mono);letter-spacing:.14em}
+.env .cat b{display:block;font:400 25px/1 Anton;text-transform:uppercase;margin-top:5px}
+.env .cat p{font:700 8px/1 var(--mono);letter-spacing:.12em;margin-top:8px}
+.noms{position:absolute;left:18px;right:18px;top:428px}
+.noms h4{font:700 8px/1 var(--mono);letter-spacing:.14em;opacity:.6;margin-bottom:7px}
+.noms .nr{display:flex;gap:8px}
+.noms .n{flex:1;border:1.5px solid #ffffff40;padding:5px 4px;text-align:center}
+.noms .n span{font-size:18px;display:block}
+.noms .n b{font:400 12px/1 Anton;display:block;margin-top:3px;letter-spacing:.03em}
+.noms .n small{font:700 7px/1 var(--mono);opacity:.6}
+.tap{position:absolute;left:18px;right:18px;bottom:22px;height:46px;background:#fff;color:var(--k);display:flex;align-items:center;justify-content:center;font:400 17px/1 Anton;text-transform:uppercase;border:2px solid #fff;box-shadow:4px 4px 0 var(--y)}
+/* 8 PLAYER OF THE MONTH */
+.s8{background:var(--y);color:var(--k)}
+.potm{position:absolute;left:34px;right:34px;top:54px;height:280px;background:var(--k);color:#fff;transform:rotate(-3deg);clip-path:polygon(0 0,100% 0,100% 91%,50% 100%,0 91%)}
+.potm .rib{background:#fff;color:var(--k);font:400 12px/1 Anton;text-align:center;padding:6px 0 5px;letter-spacing:.04em;border:3px solid var(--k)}
+.potm .big{display:flex;align-items:center;justify-content:space-between;padding:8px 14px 0}
+.potm .big .A{font-size:54px;color:var(--y)}
+.potm .big small{display:block;font:700 7.5px/1 var(--mono);letter-spacing:.12em;opacity:.7;margin-top:4px}
+.potm .face{font-size:54px;line-height:1}
+.potm .name{font:400 32px/1 Anton;text-transform:uppercase;padding:2px 14px 0;letter-spacing:.02em}
+.potm .meta{font:700 7.5px/1 var(--mono);letter-spacing:.14em;opacity:.6;padding:4px 14px 0}
+.potm .st{display:grid;grid-template-columns:1fr 1fr;margin:8px 14px 0;border-top:1.5px solid #ffffff40}
+.potm .st div{padding:6px 10px 6px 0;border-bottom:1.5px solid #ffffff40;font:700 8px/1.2 var(--mono);letter-spacing:.08em;display:flex;justify-content:space-between;align-items:center}
+.potm .st div:nth-child(even){padding:6px 0 6px 10px;border-left:1.5px solid #ffffff40}
+.potm .st b{font:400 13px/1 Anton;color:var(--y);letter-spacing:.02em}
+.bonusp{position:absolute;top:44px;right:20px;background:var(--r);color:#fff;font:400 18px/1 Anton;padding:6px 8px;border:2px solid var(--k);transform:rotate(10deg);box-shadow:3px 3px 0 var(--k)}
+.others{position:absolute;left:16px;right:16px;top:352px}
+.others h4{font:700 8px/1 var(--mono);letter-spacing:.14em;margin-bottom:5px}
+.aw2{display:flex;align-items:center;gap:8px;border-top:2px solid var(--k);padding:5px 0}
+.aw2 .ic{width:24px;height:24px;background:var(--k);color:var(--y);display:grid;place-items:center;font-size:12px}
+.aw2 .t{flex:1}
+.aw2 .t b{font:400 13px/1 Anton;text-transform:uppercase;display:block;letter-spacing:.02em}
+.aw2 .t small{font:700 7.5px/1 var(--mono);letter-spacing:.08em;opacity:.7}
+.aw2 .w{font:400 13px/1 Anton;text-transform:uppercase}
+.cab{position:absolute;left:16px;right:16px;bottom:22px;display:flex;gap:8px}
+.cab div{flex:1;height:44px;display:flex;align-items:center;justify-content:center;font:400 14px/1 Anton;text-transform:uppercase;border:2px solid var(--k)}
+.cab .p{background:var(--k);color:var(--y);box-shadow:3px 3px 0 #fff}
+</style></head><body>
+<div class="strip">
+
+<div class="cell"><div class="ph"><div class="s s1 dark">
+<div class="island"></div><div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+<div class="club"><div class="crest">SL</div><b>SUNDAY LEAGUE FC</b><span>🦊</span></div>
+<div class="mw"><span class="A">Matchweek</span><span class="A num">12</span></div>
+<div class="board"><div><small>FULL TIME IN</small><b class="yy">4D 22:55</b></div><div><small>YOU SCORED</small><b>2 / 5</b></div><div><small>RANK</small><b>1ST</b></div></div>
+<div class="fx">
+<div class="row"><span class="n">01</span><div class="t"><b>Sunrise on a hill</b><small>EASY · 10 PTS</small></div><span class="pill p-ft">FT ✓</span></div>
+<div class="row"><span class="n">02</span><div class="t"><b>Cook a stranger's recipe</b><small>MEDIUM · 25 PTS</small></div><span class="pill p-ft">FT ✓</span></div>
+<div class="row"><span class="n">03</span><div class="t"><b>Score a Panenka</b><small>HARD · 50 PTS</small></div><span class="pill p-var">IN VAR</span></div>
+<div class="row"><span class="n">04</span><div class="t"><b>Sunset swim</b><small>MEDIUM · 25 PTS</small></div><span class="pill p-red">RED ✕</span></div>
+<div class="row"><span class="n">05</span><div class="t"><b>Ref a kids' match</b><small>HARD · 50 PTS</small></div><span class="pill">TO PLAY</span></div>
+</div>
+<div class="cta"><span>Prove it</span><span>→</span></div>
+<div class="tabs"><div class="tab on"><i></i>MATCH</div><div class="tab badge"><i></i>VAR<em>5</em></div><div class="tab"><i></i>FEED</div><div class="tab"><i></i>TABLE</div></div>
+</div></div><div class="cap">1 · Matchday (Week tab)</div></div>
+
+<div class="cell"><div class="ph"><div class="s s2 dark">
+<div class="island"></div><div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+<div class="varh"><span class="A">VAR check</span><span class="live"><i></i>2 OF 5</span></div>
+<div class="card2"></div>
+<div class="card"><div class="photo"></div><div class="stamp">GOAL</div>
+<div class="cardinfo"><div class="who">🐧 LEE · 1H AGO</div><b>Cook a stranger's recipe</b><p>My grandmother's recipe. Send help.</p></div></div>
+<div class="swipe">← NO GOAL · SWIPE · GOAL →</div>
+<div class="calls"><div class="call nogo"><span class="cd"></span>No goal</div><div class="call go">Goal ⚽</div></div>
+<div class="tabs"><div class="tab"><i></i>MATCH</div><div class="tab on badge"><i></i>VAR<em>5</em></div><div class="tab"><i></i>FEED</div><div class="tab"><i></i>TABLE</div></div>
+</div></div><div class="cap">2 · VAR check (Vote tab)</div></div>
+
+<div class="cell"><div class="ph"><div class="s s3">
+<div class="island"></div><div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+<div class="goal">GOAL!<span>VAR CONFIRMS</span></div>
+<div class="polar"><div class="photo"></div><small>COOK A STRANGER'S RECIPE</small></div>
+<div class="plus">+25</div>
+<div class="conf">CONFIRMED BY 🐢 JO + 🐧 LEE<br>2 / 2 CALLS · DECISION FINAL</div>
+<div class="bonus"><div>First to score +10</div><div>🔥 4-week streak</div></div>
+<div class="back">Back to matchday</div>
+</div></div><div class="cap">3 · GOAL! moment (my proof accepted)</div></div>
+
+<div class="cell"><div class="ph"><div class="s s4">
+<div class="island"></div><div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+<div class="th"><span class="A">The Table</span></div>
+<div class="seg"><div class="on">MATCHWEEK 12</div><div>SEASON</div></div>
+<table><colgroup><col class="c1"><col><col class="c3"><col class="c4"><col class="c5"></colgroup>
+<tr><th>#</th><th>PLAYER</th><th>W</th><th>FORM</th><th style="text-align:right">PTS</th></tr>
+<tr class="lead"><td class="pos">1</td><td class="pl">🦊 <b>Alex</b><span class="mv up">▲ 2</span></td><td>4</td><td><div class="form"><i class="W">W</i><i class="W">W</i><i class="D">D</i><i class="W">W</i><i class="W">W</i></div></td><td class="pt">115</td></tr>
+<tr><td class="pos">2</td><td class="pl">🐧 <b>Lee</b><span class="mv dn">▼ 1</span></td><td>2</td><td><div class="form"><i class="W">W</i><i class="L">L</i><i class="W">W</i><i class="W">W</i><i class="D">D</i></div></td><td class="pt">60</td></tr>
+<tr><td class="pos">3</td><td class="pl">🐢 <b>Jo</b><span class="mv">— 0</span></td><td>2</td><td><div class="form"><i class="D">D</i><i class="W">W</i><i class="W">W</i><i class="L">L</i><i class="W">W</i></div></td><td class="pt">35</td></tr>
+<tr><td class="pos">4</td><td class="pl">🐻 <b>Sam</b><span class="mv dn">▼ 1</span></td><td>1</td><td><div class="form"><i class="L">L</i><i class="W">W</i><i class="L">L</i><i class="D">D</i><i class="W">W</i></div></td><td class="pt">10</td></tr>
+</table>
+<div class="relz">▼ RELEGATION ZONE — BUYS THE ROUND 🍺</div>
+<table style="margin-top:0"><colgroup><col class="c1"><col><col class="c3"><col class="c4"><col class="c5"></colgroup><tr class="rel"><td class="pos">5</td><td class="pl">🐙 <b>Mika</b><span class="mv dn">▼ 2</span></td><td>0</td><td><div class="form"><i class="L">L</i><i class="L">L</i><i class="D">D</i><i class="L">L</i><i class="L">L</i></div></td><td class="pt">0</td></tr></table>
+<div class="clubform"><small>CLUB FORM<br>EVERYONE SCORED</small><b>🔥 6 WEEKS</b></div>
+<div class="tabs"><div class="tab"><i></i>MATCH</div><div class="tab badge"><i></i>VAR<em>5</em></div><div class="tab"><i></i>FEED</div><div class="tab on"><i></i>TABLE</div></div>
+</div></div><div class="cap">4 · The Table (Table tab)</div></div>
+
+<div class="cell"><div class="ph"><div class="s s5">
+<div class="island"></div><div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+<div class="rc">
+<div class="c">SUNDAY LEAGUE FC · EST. 2026</div>
+<div class="c"><h3>FULL-TIME RECEIPT</h3></div>
+<div class="c">MATCHWEEK 12 · 03–09 NOV<br>PLAYER: ALEX 🦊 #07</div>
+<div class="dash"></div>
+<div class="l"><span>01 SUNRISE ON A HILL</span><span>10</span></div>
+<div class="l"><span>02 COOK A STRANGER'S RECIPE</span><span>25</span></div>
+<div class="l"><span>03 SCORE A PANENKA</span><span>50</span></div>
+<div class="l x"><span>04 SUNSET SWIM · VAR: NO GOAL</span><span>0</span></div>
+<div class="l"><span>FIRST TO SCORE BONUS</span><span>10</span></div>
+<div class="l"><span>STREAK 🔥 4 WKS</span><span>20</span></div>
+<div class="dash"></div>
+<div class="tot"><span>TOTAL</span><span>115 PTS</span></div>
+<div class="l"><span>RANK</span><span>1ST ▲2</span></div>
+<div class="motm"><span>⭐ MAN OF THE MATCH</span><span>ALEX</span></div>
+<div class="spoon"><span>🥄 WOODEN SPOON</span><span>MIKA (PAYS)</span></div>
+<div class="bar"></div>
+<div class="c">NO REFUNDS ON RED CARDS.<br>SCREENSHOT IT. SEND IT TO THE GC.</div>
+</div>
+<div class="share">Share to the group chat ↗</div>
+</div></div><div class="cap">5 · Full-time receipt (weekly)</div></div>
+
+<div class="cell"><div class="ph"><div class="s s6 dark">
+<div class="island"></div><div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+<div class="hd"><span class="A">Title race</span><small>SEASON 1<br>MW 5 → 12</small></div>
+<div class="seg inv"><div class="on">ALL PLAYERS</div><div>ME VS RIVAL</div><div>PER WEEK</div></div>
+<div class="chart">
+<svg width="272" height="232" viewBox="0 0 272 232" role="img" aria-label="Cumulative points per player">
+<g stroke="#ffffff1a" stroke-width="1"><line x1="0" y1="20" x2="190" y2="20"/><line x1="0" y1="70" x2="190" y2="70"/><line x1="0" y1="120" x2="190" y2="120"/><line x1="0" y1="170" x2="190" y2="170"/><line x1="0" y1="220" x2="190" y2="220" stroke="#ffffff55"/></g>
+<g class="ax"><text x="0" y="66">300</text><text x="0" y="116">200</text><text x="0" y="166">100</text>
+<text x="0" y="231">MW5</text><text x="50" y="231">MW7</text><text x="104" y="231">MW9</text><text x="166" y="231">MW12</text></g>
+<g fill="none" stroke-linejoin="round" stroke-linecap="round">
+<polyline stroke="#ffffff45" stroke-width="2" points="0,215 27,202.5 54,192.5 81,185 108,180 135,170 162,165 189,165"/>
+<polyline stroke="#ffffff45" stroke-width="2" points="0,205 27,195 54,190 81,172.5 108,160 135,140 162,127.5 189,122.5"/>
+<polyline stroke="#ffffff45" stroke-width="2" points="0,210 27,197.5 54,177.5 81,165 108,145 135,132.5 162,115 189,97.5"/>
+<polyline stroke="#ffffff" stroke-width="2" points="0,192.5 27,175 54,155 81,140 108,125 135,105 162,80 189,50"/>
+<polyline stroke="#0B0B0C" stroke-width="6" points="0,200 27,185 54,172.5 81,150 108,127.5 135,110 162,95 189,37.5"/>
+<polyline stroke="#FFD60A" stroke-width="3" points="0,200 27,185 54,172.5 81,150 108,127.5 135,110 162,95 189,37.5"/>
+</g>
+<line x1="162" y1="22" x2="162" y2="220" stroke="#ffffff" stroke-dasharray="2 3" stroke-width="1"/>
+<circle cx="189" cy="37.5" r="5" fill="#FFD60A" stroke="#0B0B0C" stroke-width="2"/>
+<circle cx="189" cy="50" r="4" fill="#fff" stroke="#0B0B0C" stroke-width="2"/>
+<g class="lbl"><text x="198" y="38" fill="#FFD60A">🦊 ALEX 365</text><text x="198" y="56" fill="#fff">🐧 LEE 340</text>
+<text x="198" y="101" fill="#ffffffb0">🐢 JO</text><text x="198" y="126" fill="#ffffffb0">🐻 SAM</text><text x="198" y="169" fill="#ffffffb0">🐙 MIKA</text></g>
+<text class="note" x="120" y="14" fill="#fff">LEAD CHANGE ↘</text>
+</svg>
+<div class="tip"><b>MW12 · +115 FOR ALEX</b>BEST WEEK OF THE SEASON<br>OVERTAKES LEE AT THE TOP</div>
+</div>
+<div class="wk"><h4>YOUR POINTS PER MATCHWEEK</h4>
+<div class="bars"><div style="height:35%"></div><div style="height:26%"></div><div style="height:22%"></div><div style="height:39%"></div><div style="height:39%"></div><div style="height:30%"></div><div style="height:26%"></div><div class="best" style="height:100%"></div></div>
+<div class="bx"><span>MW5</span><span>MW12</span></div></div>
+<div class="chips"><div><small>BEST WEEK</small><b>115</b></div><div><small>AVG / WEEK</small><b>46</b></div><div><small>FORM</small><b class="f">🔥 4</b></div></div>
+<div class="tabs"><div class="tab"><i></i>MATCH</div><div class="tab"><i></i>VAR</div><div class="tab"><i></i>FEED</div><div class="tab on"><i></i>TABLE</div></div>
+</div></div><div class="cap">6 · Title race (inside Table tab)</div></div>
+
+<div class="cell"><div class="ph"><div class="s s7">
+<div class="island"></div><div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+<div class="aw"><small>● LIVE FROM THE GROUP CHAT</small><div class="A">November<br><span>Awards</span></div></div>
+<div class="prog"><i class="d"></i><i class="d"></i><i class="d"></i><i></i><i></i><i></i></div>
+<div class="env"><div class="seal">G</div>
+<div class="cat"><small>AWARD 4 OF 6</small><b>Player of<br>the month</b><p>AND THE WINNER IS…</p></div></div>
+<div class="noms"><h4>NOMINEES</h4><div class="nr">
+<div class="n"><span>🦊</span><b>ALEX</b><small>365 PTS</small></div>
+<div class="n"><span>🐧</span><b>LEE</b><small>340 PTS</small></div>
+<div class="n"><span>🐢</span><b>JO</b><small>245 PTS</small></div></div></div>
+<div class="tap">Tap to open the envelope</div>
+</div></div><div class="cap">7 · Awards night — envelope reveal</div></div>
+
+<div class="cell"><div class="ph"><div class="s s8">
+<div class="island"></div><div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+<div class="potm"><div class="rib">PLAYER OF THE MONTH · NOV 2026</div>
+<div class="big"><div><div class="A">365</div><small>POINTS IN NOVEMBER</small></div><div class="face">🦊</div></div>
+<div class="name">Alex</div><div class="meta">SUNDAY LEAGUE FC · #07</div>
+<div class="st"><div>GOALS<b>14</b></div><div>RED CARDS<b>1</b></div><div>FIRST TO SCORE<b>4</b></div><div>BEST WEEK<b>115</b></div></div>
+</div>
+<div class="bonusp">+50</div>
+<div class="others"><h4>ALSO TONIGHT</h4>
+<div class="aw2"><span class="ic">🥾</span><div class="t"><b>Golden boot</b><small>MOST GOALS · 16</small></div><span class="w">🐧 Lee</span></div>
+<div class="aw2"><span class="ic">🟨</span><div class="t"><b>Toughest ref</b><small>MOST NO-GOAL CALLS · 9</small></div><span class="w">🐢 Jo</span></div>
+<div class="aw2"><span class="ic">📈</span><div class="t"><b>Comeback kid</b><small>BIGGEST CLIMB · ▲3</small></div><span class="w">🐻 Sam</span></div>
+<div class="aw2"><span class="ic">🥄</span><div class="t"><b>Wooden spoon</b><small>BUYS THE ROUND 🍺</small></div><span class="w">🐙 Mika</span></div>
+</div>
+<div class="cab"><div>Trophy cabinet</div><div class="p">Share ↗</div></div>
+</div></div><div class="cap">8 · Player of the Month card + awards</div></div>
+
+</div></body></html>

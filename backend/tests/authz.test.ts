@@ -279,7 +279,7 @@ describe('submission upload', () => {
 
     const response = await app.request(
       `/challenges/${CHALLENGE}/submissions`,
-      { method: 'POST', headers: auth(TOKEN_2), body: form },
+      { method: 'POST', headers: { ...auth(TOKEN_2), 'Content-Length': '1024' }, body: form },
       env,
     );
     expect(response.status).toBe(201);
@@ -321,7 +321,7 @@ describe('submission upload', () => {
     wrongType.set('mediaType', 'photo');
     const unsupported = await app.request(
       `/challenges/${CHALLENGE}/submissions`,
-      { method: 'POST', headers: auth(TOKEN_2), body: wrongType },
+      { method: 'POST', headers: { ...auth(TOKEN_2), 'Content-Length': '1024' }, body: wrongType },
       env,
     );
     expect(unsupported.status).toBe(415);
@@ -335,10 +335,42 @@ describe('submission upload', () => {
     extraField.set('surprise', 'nope');
     const unknown = await app.request(
       `/challenges/${CHALLENGE}/submissions`,
-      { method: 'POST', headers: auth(TOKEN_2), body: extraField },
+      { method: 'POST', headers: { ...auth(TOKEN_2), 'Content-Length': '1024' }, body: extraField },
       env,
     );
     expect(unknown.status).toBe(400);
+  });
+
+  it('requires a numeric Content-Length and rejects an oversized declared body before parsing', async () => {
+    const form = new FormData();
+    form.set('media', new File([new Uint8Array([1])], 'proof.jpg', { type: 'image/jpeg' }));
+    form.set('mediaType', 'photo');
+
+    const missing = await app.request(
+      `/challenges/${CHALLENGE}/submissions`,
+      { method: 'POST', headers: auth(TOKEN_2), body: form },
+      env,
+    );
+    expect(missing.status).toBe(411);
+    expect(await missing.json()).toMatchObject({ error: { code: 'length_required' } });
+
+    const nonNumeric = await app.request(
+      `/challenges/${CHALLENGE}/submissions`,
+      { method: 'POST', headers: { ...auth(TOKEN_2), 'Content-Length': 'nope' }, body: form },
+      env,
+    );
+    expect(nonNumeric.status).toBe(411);
+
+    const oversized = await app.request(
+      `/challenges/${CHALLENGE}/submissions`,
+      {
+        method: 'POST',
+        headers: { ...auth(TOKEN_2), 'Content-Length': String(60 * 1024 * 1024) },
+        body: form,
+      },
+      env,
+    );
+    expect(oversized.status).toBe(413);
   });
 
   it('rejects a second active submission for the same challenge', async () => {
@@ -348,7 +380,7 @@ describe('submission upload', () => {
       form.set('mediaType', 'photo');
       const response = await app.request(
         `/challenges/${CHALLENGE}/submissions`,
-        { method: 'POST', headers: auth(TOKEN_2), body: form },
+        { method: 'POST', headers: { ...auth(TOKEN_2), 'Content-Length': '1024' }, body: form },
         env,
       );
       if (attempt === 0) expect(response.status).toBe(201);

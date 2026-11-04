@@ -10,6 +10,7 @@ import type {
 import { toPublicUser } from '../types';
 import { all, first } from '../lib/db';
 import { randomId } from '../lib/crypto';
+import { deleteMediaKeys } from './media';
 import { notFound } from '../lib/errors';
 import {
   FIRST_FINISH_BONUS,
@@ -65,45 +66,113 @@ export async function getChallengesForWeek(
 export interface ChallengeStatusRow extends ChallengeRow {
   accepted_count: number;
   my_status: string | null;
+  veto_count: number;
+  my_veto: number;
+  is_replacement: number;
+  creator_id: string | null;
+  creator_display_name: string | null;
+  creator_avatar_emoji: string | null;
+  captain_challenge_id: string | null;
+}
+
+/**
+ * One row per non-vetoed fixture with the viewer's status, veto tally and
+ * captain flag. `LEFT JOIN captains` is viewer-scoped; binds are, in order:
+ * viewer (my status), viewer (my veto), viewer (captain), week/challenge id.
+ */
+const CHALLENGE_STATUS_SELECT = `
+  SELECT c.*,
+         (SELECT COUNT(*) FROM submissions s
+           WHERE s.challenge_id = c.id AND s.status = 'accepted') AS accepted_count,
+         (SELECT s.status FROM submissions s
+           WHERE s.challenge_id = c.id AND s.user_id = ?
+           ORDER BY s.created_at DESC, s.id DESC LIMIT 1) AS my_status,
+         (SELECT COUNT(*) FROM vetoes v WHERE v.challenge_id = c.id) AS veto_count,
+         (SELECT COUNT(*) FROM vetoes v
+           WHERE v.challenge_id = c.id AND v.user_id = ?) AS my_veto,
+         (SELECT COUNT(*) FROM challenges old WHERE old.replaced_by = c.id) AS is_replacement,
+         u.id AS creator_id,
+         u.display_name AS creator_display_name,
+         u.avatar_emoji AS creator_avatar_emoji,
+         cap.challenge_id AS captain_challenge_id
+    FROM challenges c
+    LEFT JOIN users u ON u.id = c.created_by
+    LEFT JOIN captains cap ON cap.week_id = c.week_id AND cap.user_id = ?
+`;
+
+function challengeStatusJson(
+  row: ChallengeStatusRow,
+  memberCount: number,
+  now: number,
+): ChallengeWithMyStatusJson {
+  let myStatus: MyChallengeStatus = 'todo';
+  if (row.my_status === 'accepted') myStatus = 'accepted';
+  else if (row.my_status === 'pending') myStatus = 'pending';
+  else if (
+    row.my_status === 'rejected' ||
+    row.my_status === 'expired' ||
+    row.my_status === 'removed'
+  ) {
+    myStatus = 'rejected';
+  }
+
+  const createdBy = row.creator_id
+    ? toPublicUser({
+        id: row.creator_id,
+        apple_sub: '',
+        display_name: row.creator_display_name ?? '',
+        avatar_emoji: row.creator_avatar_emoji,
+        created_at: 0,
+        terms_accepted_at: null,
+      })
+    : null;
+
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    difficulty: row.difficulty,
+    points: row.points,
+    position: row.position,
+    myStatus,
+    acceptedCount: row.accepted_count,
+    vetoCount: row.veto_count,
+    vetoThreshold: Math.ceil(Math.max(1, memberCount) / 2),
+    myVeto: row.my_veto > 0,
+    isNew: row.is_replacement > 0 && row.created_at > now - 86_400,
+    isHouse: row.is_house === 1,
+    createdBy,
+    isCaptain: row.captain_challenge_id === row.id,
+  };
 }
 
 export async function challengesWithMyStatus(
   db: D1Database,
   weekId: string,
   userId: string,
+  memberCount = 1,
+  now: number = Math.floor(Date.now() / 1000),
 ): Promise<ChallengeWithMyStatusJson[]> {
   const rows = await all<ChallengeStatusRow>(
     db
-      .prepare(
-        `SELECT c.*,
-                (SELECT COUNT(*) FROM submissions s
-                  WHERE s.challenge_id = c.id AND s.status = 'accepted') AS accepted_count,
-                (SELECT s.status FROM submissions s
-                  WHERE s.challenge_id = c.id AND s.user_id = ?
-                  ORDER BY s.created_at DESC, s.id DESC LIMIT 1) AS my_status
-           FROM challenges c
-          WHERE c.week_id = ?
-          ORDER BY c.position ASC, c.id ASC`,
-      )
-      .bind(userId, weekId),
+      .prepare(`${CHALLENGE_STATUS_SELECT} WHERE c.week_id = ? AND c.vetoed_at IS NULL ORDER BY c.position ASC, c.id ASC`)
+      .bind(userId, userId, userId, weekId),
   );
+  return rows.map((row) => challengeStatusJson(row, memberCount, now));
+}
 
-  return rows.map((row) => {
-    let myStatus: MyChallengeStatus = 'todo';
-    if (row.my_status === 'accepted') myStatus = 'accepted';
-    else if (row.my_status === 'pending') myStatus = 'pending';
-    else if (row.my_status === 'rejected' || row.my_status === 'expired') myStatus = 'rejected';
-    return {
-      id: row.id,
-      title: row.title,
-      description: row.description,
-      difficulty: row.difficulty,
-      points: row.points,
-      position: row.position,
-      myStatus,
-      acceptedCount: row.accepted_count,
-    };
-  });
+/** Single-fixture view (also used for the veto response, vetoed or not). */
+export async function challengeWithMyStatus(
+  db: D1Database,
+  challengeId: string,
+  userId: string,
+  memberCount: number,
+  now: number,
+): Promise<ChallengeWithMyStatusJson | null> {
+  const row = await first<ChallengeStatusRow>(
+    db.prepare(`${CHALLENGE_STATUS_SELECT} WHERE c.id = ?`).bind(userId, userId, userId, challengeId),
+  );
+  return row ? challengeStatusJson(row, memberCount, now) : null;
 }
 
 /** Titles from the previous three weeks (for the DeepSeek no-repeat prompt). */
@@ -155,13 +224,19 @@ export async function createWeekAndChallenges(
 ): Promise<CreatedWeek> {
   const bounds = weekBoundsFromStart(startsAt, group.timezone);
   const weekId = randomId();
+  const numberRow = await first<{ next_number: number }>(
+    env.DB.prepare(
+      'SELECT COALESCE(MAX(number), 0) + 1 AS next_number FROM weeks WHERE group_id = ?',
+    ).bind(group.id),
+  );
+  const number = numberRow?.next_number ?? 1;
 
   const insert = await env.DB.prepare(
-    `INSERT INTO weeks (id, group_id, starts_at, ends_at, vote_deadline, status, reminder_sent)
-     VALUES (?, ?, ?, ?, ?, 'open', 0)
+    `INSERT INTO weeks (id, group_id, starts_at, ends_at, vote_deadline, status, reminder_sent, number)
+     VALUES (?, ?, ?, ?, ?, 'open', 0, ?)
      ON CONFLICT(group_id, starts_at) DO NOTHING`,
   )
-    .bind(weekId, group.id, bounds.startsAt, bounds.endsAt, bounds.voteDeadline)
+    .bind(weekId, group.id, bounds.startsAt, bounds.endsAt, bounds.voteDeadline, number)
     .run();
 
   if ((insert.meta.changes ?? 0) === 0) {
@@ -198,6 +273,7 @@ export async function createWeekAndChallenges(
     previousTitles,
   });
 
+  const createdAt = Math.floor(Date.now() / 1000);
   const challenges: ChallengeRow[] = generated.challenges.slice(0, group.challenges_per_week).map(
     (draft, index) => ({
       id: randomId(),
@@ -207,6 +283,11 @@ export async function createWeekAndChallenges(
       difficulty: draft.difficulty,
       points: pointsForDifficulty(draft.difficulty),
       position: index,
+      vetoed_at: null,
+      replaced_by: null,
+      is_house: 0,
+      created_by: null,
+      created_at: createdAt,
     }),
   );
 
@@ -218,8 +299,10 @@ export async function createWeekAndChallenges(
   await env.DB.batch(
     challenges.map((challenge) =>
       env.DB.prepare(
-        `INSERT INTO challenges (id, week_id, title, description, difficulty, points, position)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO challenges
+           (id, week_id, title, description, difficulty, points, position,
+            vetoed_at, replaced_by, is_house, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, ?)`,
       ).bind(
         challenge.id,
         challenge.week_id,
@@ -228,6 +311,7 @@ export async function createWeekAndChallenges(
         challenge.difficulty,
         challenge.points,
         challenge.position,
+        challenge.created_at,
       ),
     ),
   );
@@ -241,6 +325,7 @@ export async function createWeekAndChallenges(
       vote_deadline: bounds.voteDeadline,
       status: 'open',
       reminder_sent: 0,
+      number,
     },
     created: true,
     challenges,
@@ -285,32 +370,36 @@ export async function closeOpenWeeksBefore(
     .run();
 }
 
-export async function expirePendingForWeek(db: D1Database, weekId: string): Promise<void> {
-  await db
-    .prepare(
+export async function expirePendingForWeek(env: Env, weekId: string): Promise<void> {
+  // RETURNING limits the media cleanup to rows this statement actually
+  // expired; a concurrent acceptance can never lose its object here.
+  const rows = await all<{ media_key: string }>(
+    env.DB.prepare(
       `UPDATE submissions SET status = 'expired'
         WHERE status = 'pending'
-          AND challenge_id IN (SELECT id FROM challenges WHERE week_id = ?)`,
-    )
-    .bind(weekId)
-    .run();
+          AND challenge_id IN (SELECT id FROM challenges WHERE week_id = ?)
+        RETURNING media_key`,
+    ).bind(weekId),
+  );
+  await deleteMediaKeys(env, rows.map((row) => row.media_key));
 }
 
 /** Cron step 3: pending submissions whose week's vote deadline has passed. */
-export async function expirePastDeadlineSubmissions(db: D1Database, now: number): Promise<number> {
-  const result = await db
-    .prepare(
+export async function expirePastDeadlineSubmissions(env: Env, now: number): Promise<number> {
+  const rows = await all<{ media_key: string }>(
+    env.DB.prepare(
       `UPDATE submissions SET status = 'expired'
         WHERE status = 'pending'
           AND challenge_id IN (
             SELECT c.id FROM challenges c
             JOIN weeks w ON w.id = c.week_id
             WHERE w.vote_deadline <= ?
-          )`,
-    )
-    .bind(now)
-    .run();
-  return result.meta.changes ?? 0;
+          )
+        RETURNING media_key`,
+    ).bind(now),
+  );
+  await deleteMediaKeys(env, rows.map((row) => row.media_key));
+  return rows.length;
 }
 
 async function insertPointEvent(
@@ -319,16 +408,18 @@ async function insertPointEvent(
     groupId: string;
     weekId: string;
     userId: string;
-    kind: 'challenge' | 'first_bonus' | 'weekly_winner' | 'streak';
+    kind: 'challenge' | 'first_bonus' | 'weekly_winner' | 'streak' | 'captain';
     points: number;
     submissionId: string | null;
+    /** Set for first_bonus: the partial unique index is per challenge. */
+    challengeId?: string | null;
     now: number;
   },
-): Promise<void> {
-  await env.DB.prepare(
+): Promise<boolean> {
+  const result = await env.DB.prepare(
     `INSERT OR IGNORE INTO point_events
-       (id, group_id, week_id, user_id, kind, points, submission_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, group_id, week_id, user_id, kind, points, submission_id, challenge_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       randomId(),
@@ -338,9 +429,11 @@ async function insertPointEvent(
       event.kind,
       event.points,
       event.submissionId,
+      event.challengeId ?? null,
       event.now,
     )
     .run();
+  return (result.meta.changes ?? 0) > 0;
 }
 
 /**
@@ -368,6 +461,25 @@ export async function awardAcceptedSubmission(
     now: params.now,
   });
 
+  // Captain armband: the fixture's base points again, never the first bonus.
+  const captain = await first<{ challenge_id: string }>(
+    env.DB.prepare('SELECT challenge_id FROM captains WHERE week_id = ? AND user_id = ?')
+      .bind(params.weekId, params.submission.user_id),
+  );
+  let captainPoints = 0;
+  if (captain?.challenge_id === params.submission.challenge_id) {
+    captainPoints = params.challengePoints;
+    await insertPointEvent(env, {
+      groupId: params.groupId,
+      weekId: params.weekId,
+      userId: params.submission.user_id,
+      kind: 'captain',
+      points: captainPoints,
+      submissionId: params.submission.id,
+      now: params.now,
+    });
+  }
+
   const acceptedRows = await all<{
     id: string;
     user_id: string;
@@ -393,19 +505,23 @@ export async function awardAcceptedSubmission(
     points: row.points,
   }));
 
-  const first = firstAcceptedSubmission(accepted);
-  let awarded = params.challengePoints;
-  if (first?.id === params.submission.id) {
-    await insertPointEvent(env, {
+  const firstAccepted = firstAcceptedSubmission(accepted);
+  let awarded = params.challengePoints + captainPoints;
+  if (firstAccepted?.id === params.submission.id) {
+    // The partial unique index on point_events(challenge_id) for first_bonus
+    // makes concurrent awards for one challenge impossible; only the caller
+    // whose INSERT actually landed reports the bonus.
+    const inserted = await insertPointEvent(env, {
       groupId: params.groupId,
       weekId: params.weekId,
       userId: params.submission.user_id,
       kind: 'first_bonus',
       points: FIRST_FINISH_BONUS,
       submissionId: params.submission.id,
+      challengeId: params.submission.challenge_id,
       now: params.now,
     });
-    awarded += FIRST_FINISH_BONUS;
+    if (inserted) awarded += FIRST_FINISH_BONUS;
   }
   return awarded;
 }
@@ -464,13 +580,13 @@ export async function awardWeekEnd(
 ): Promise<{ winners: string[]; streaks: Map<string, number> }> {
   if (week.vote_deadline > now) return { winners: [], streaks: new Map() };
 
-  await expirePendingForWeek(env.DB, week.id);
+  await expirePendingForWeek(env, week.id);
 
   const totals = await all<{ user_id: string; points: number }>(
     env.DB.prepare(
       `SELECT user_id, SUM(points) AS points
          FROM point_events
-        WHERE group_id = ? AND week_id = ? AND kind IN ('challenge', 'first_bonus')
+        WHERE group_id = ? AND week_id = ? AND kind IN ('challenge', 'first_bonus', 'captain')
         GROUP BY user_id`,
     ).bind(group.id, week.id),
   );
@@ -643,15 +759,16 @@ export async function weekForRead(
   return week;
 }
 
-/** Convenience used by cron: delete ancient sessions/rate-limit rows. */
+/** Convenience used by cron: delete expired sessions/nonces and old buckets. */
 export async function cleanupEphemeral(db: D1Database, now: number): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
+    db.prepare('DELETE FROM used_nonces WHERE expires_at <= ?').bind(now),
     db.prepare('DELETE FROM rate_limits WHERE updated_at <= ?').bind(now - 2 * 86_400),
   ]);
 }
 
 /** Exposed for tests/routes that need a week JSON without an import cycle. */
-export function serializeWeek(week: WeekRow) {
-  return weekJson(week);
+export function serializeWeek(week: WeekRow, vetoesUsed = 0) {
+  return weekJson(week, null, vetoesUsed);
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Full screen proof: media, caption and the voting controls.
+/// Full screen proof: the media, the caption and the two calls.
 struct SubmissionDetailView: View {
     let model: GroupViewModel
 
@@ -9,6 +9,9 @@ struct SubmissionDetailView: View {
 
     @State private var current: Submission
     @State private var isVoting = false
+    @State private var showingMenu = false
+    @State private var showingBanter = false
+    @State private var toast = ToastModel()
 
     init(submission: Submission, model: GroupViewModel) {
         self.model = model
@@ -23,75 +26,156 @@ struct SubmissionDetailView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        AvatarView(emoji: current.user.avatarEmoji, size: 32)
+                        Text(current.user.avatarEmoji ?? "🙂")
+                            .font(.system(size: 20))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(current.user.displayName)
-                                .font(.subheadline.weight(.semibold))
-                            Text(current.challengeTitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Text(current.user.displayName.uppercased())
+                                .displayStyle(16)
+                                .foregroundStyle(Color.paper)
+                            Text(current.challengeTitle.uppercased())
+                                .labelStyle(8)
+                                .foregroundStyle(Color.paper.opacity(0.6))
                         }
                         Spacer()
-                        StatusChip(title: current.status.title, color: current.status.color)
+                        StatusPill(kind: StatusPill.Kind(current.status))
                     }
 
                     if let caption = current.caption, !caption.isEmpty {
                         Text(caption)
                             .font(.subheadline)
+                            .foregroundStyle(Color.paper.opacity(0.85))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+
+                    BanterBar(
+                        submission: current,
+                        onToggleReaction: { emoji in
+                            toggleReaction(emoji)
+                        },
+                        onOpenBanter: { showingBanter = true }
+                    )
                 }
 
                 if current.isSoloGroup {
-                    Label("vote.solo_group", systemImage: "person.2.slash")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
+                    Text("Invite friends to get votes on your proofs.")
+                        .labelStyle(9)
+                        .foregroundStyle(Color.card)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     Text(voteProgressText)
-                        .font(.footnote.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .labelStyle(9)
+                        .foregroundStyle(Color.paper.opacity(0.7))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if current.status == .pending && !current.isSoloGroup {
+                if current.status == .pending, !current.isSoloGroup {
                     HStack(spacing: 12) {
                         Button {
                             vote(approve: false)
                         } label: {
-                            Label("vote.reject", systemImage: "xmark")
+                            Text("No goal")
+                                .displayStyle(17)
                                 .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .background(Color.red)
+                                .foregroundStyle(Color.paper)
+                                .brutalBorder(Color.paper)
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.red)
+                        .buttonStyle(.plain)
+                        .rotationEffect(.degrees(Gauntlet.Rotation.callNoGoal))
 
                         Button {
                             vote(approve: true)
                         } label: {
-                            Label("vote.approve", systemImage: "checkmark")
-                                .frame(maxWidth: .infinity)
+                            HStack(spacing: 8) {
+                                // The ball is an SF Symbol — no emoji as an icon.
+                                Image(systemName: "soccerball")
+                                    .font(.system(size: 17, weight: .bold))
+                                Text("Goal")
+                                    .displayStyle(17)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(Color.pitch)
+                            .foregroundStyle(Color.ink)
+                            .brutalBorder(Color.paper)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
+                        .buttonStyle(.plain)
+                        .rotationEffect(.degrees(Gauntlet.Rotation.callGoal))
                     }
                     .disabled(isVoting)
                 }
             }
-            .padding()
-            .background(.ultraThinMaterial)
+            .padding(.horizontal, 18)
+            .padding(.top, 44)
+            .padding(.bottom, 18)
+            .background {
+                LinearGradient(
+                    colors: [.clear, Color.black.opacity(0.9)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+            }
         }
         .overlay(alignment: .topTrailing) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, .black.opacity(0.4))
+            HStack(spacing: 8) {
+                Button {
+                    showingMenu = true
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color.paper)
+                        .frame(width: 40, height: 40)
+                        .background(Color.black.opacity(0.5))
+                        .overlay {
+                            Rectangle().stroke(Color.paper, lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("More"))
+
+                Button {
+                    dismiss()
+                } label: {
+                    Text("✕")
+                        .displayStyle(18)
+                        .foregroundStyle(Color.paper)
+                        .frame(width: 40, height: 40)
+                        .background(Color.black.opacity(0.5))
+                        .overlay {
+                            Rectangle().stroke(Color.paper, lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Close"))
             }
-            .padding()
+            .padding(.top, 8)
+            .padding(.trailing, 14)
+        }
+        .brutalToast(toast, bottomPadding: 140)
+        .sheet(isPresented: $showingMenu) {
+            ProofMenuSheet(
+                submission: current,
+                myUserID: model.myUserID ?? "",
+                api: appState.api,
+                onDeleted: {
+                    dismiss()
+                },
+                onReported: {
+                    toast.show("Reported. It's hidden for you.")
+                    dismiss()
+                },
+                onBlocked: {
+                    toast.show("Blocked. You won't see them anymore.")
+                    dismiss()
+                }
+            )
+        }
+        .sheet(isPresented: $showingBanter) {
+            BanterSheet(submission: current, api: appState.api)
         }
     }
 
@@ -120,9 +204,22 @@ struct SubmissionDetailView: View {
             }
         }
     }
+
+    private func toggleReaction(_ emoji: ReactionEmoji) {
+        let submission = current
+        Task {
+            guard let updated = await model.toggleReaction(
+                on: submission,
+                emoji: emoji,
+                api: appState.api
+            ) else { return }
+            current = updated
+            Haptics.selection()
+        }
+    }
 }
 
-#Preview("Submission") {
+#Preview("Proof") {
     SubmissionDetailView(submission: MockData.submissions[0], model: .preview())
         .environment(AppState.preview())
 }

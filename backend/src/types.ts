@@ -20,6 +20,13 @@ export interface Env {
   APNS_TEAM_ID?: string;
   APNS_ENV?: string;
   APNS_BASE_URL?: string;
+
+  /** Public origin used to build invite links (`<base>/join/<code>`). */
+  PUBLIC_BASE_URL?: string;
+  /** Apple Developer team id for the universal-links association file. */
+  APPLE_TEAM_ID?: string;
+  /** TestFlight invite URL shown on the /join page. */
+  TESTFLIGHT_URL?: string;
 }
 
 export interface PublicUser {
@@ -43,6 +50,8 @@ export interface UserRow {
   display_name: string;
   avatar_emoji: string | null;
   created_at: number;
+  /** Unix seconds at which the user accepted the house rules, or null. */
+  terms_accepted_at?: number | null;
 }
 
 export interface SessionRow {
@@ -68,6 +77,8 @@ export interface GroupRow {
   theme: string | null;
   language: string;
   timezone: string;
+  /** Display-only club forfeit, max 60 chars. Never enforced. */
+  forfeit: string;
   created_at: number;
 }
 
@@ -85,6 +96,8 @@ export interface WeekRow {
   vote_deadline: number;
   status: 'open' | 'closed';
   reminder_sent: number;
+  /** 1-based matchweek index since the group was created. */
+  number: number;
 }
 
 export interface ChallengeRow {
@@ -95,9 +108,17 @@ export interface ChallengeRow {
   difficulty: 'easy' | 'medium' | 'hard';
   points: number;
   position: number;
+  /** Set when the fixture was vetoed out; vetoed challenges are never served. */
+  vetoed_at: number | null;
+  /** The replacement challenge created after a successful veto, if any. */
+  replaced_by: string | null;
+  /** 1 for member-written house fixtures. */
+  is_house: number;
+  created_by: string | null;
+  created_at: number;
 }
 
-export type SubmissionStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
+export type SubmissionStatus = 'pending' | 'accepted' | 'rejected' | 'expired' | 'removed';
 
 export interface SubmissionRow {
   id: string;
@@ -119,7 +140,13 @@ export interface VoteRow {
   created_at: number;
 }
 
-export type PointKind = 'challenge' | 'first_bonus' | 'weekly_winner' | 'streak';
+export type PointKind =
+  | 'challenge'
+  | 'first_bonus'
+  | 'weekly_winner'
+  | 'streak'
+  | 'monthly_award'
+  | 'captain';
 
 export interface PointEventRow {
   id: string;
@@ -142,14 +169,22 @@ export interface GroupJson {
   timezone: string;
   ownerId: string;
   memberCount: number;
+  forfeit: string;
+  /** `<PUBLIC_BASE_URL>/join/<inviteCode>`. */
+  inviteUrl: string;
 }
 
 export interface WeekJson {
   id: string;
+  number: number;
   startsAt: number;
   endsAt: number;
   voteDeadline: number;
   status: 'open' | 'closed';
+  /** The fixture the caller picked as their captain fixture this week. */
+  myCaptainChallengeId: string | null;
+  /** Fixtures this club already replaced this week (0–2). */
+  vetoesUsed: number;
 }
 
 export type MyChallengeStatus = 'todo' | 'pending' | 'accepted' | 'rejected';
@@ -163,11 +198,25 @@ export interface ChallengeWithMyStatusJson {
   position: number;
   myStatus: MyChallengeStatus;
   acceptedCount: number;
+  /** Members who vetoed this fixture and the votes needed to replace it. */
+  vetoCount: number;
+  vetoThreshold: number;
+  myVeto: boolean;
+  /** True for a replacement fixture created less than 24h ago. */
+  isNew: boolean;
+  isHouse: boolean;
+  createdBy: PublicUser | null;
+  isCaptain: boolean;
 }
 
 export interface MemberJson {
   user: PublicUser;
   joinedAt: number;
+}
+
+/** A banned user with the unix-second timestamp of the ban. */
+export interface BannedUserJson extends PublicUser {
+  bannedAt: number;
 }
 
 export interface SubmissionJson {
@@ -185,13 +234,165 @@ export interface SubmissionJson {
   myVote: boolean | null;
   createdAt: number;
   decidedAt: number | null;
+  /**
+   * Members who voted on the submission (in vote order). Empty while the tally
+   * is hidden: the viewer has not voted yet and the submission is still pending.
+   */
+  voters: PublicUser[];
+  /** The six allowed emojis in fixed order; zero-count reactions are omitted. */
+  reactions: ReactionJson[];
+  commentCount: number;
 }
+
+export interface ReactionJson {
+  emoji: string;
+  count: number;
+  mine: boolean;
+}
+
+export interface CommentJson {
+  id: string;
+  user: PublicUser;
+  text: string;
+  createdAt: number;
+  canDelete: boolean;
+}
+
+/** Client-editable push categories (all on by default). */
+export interface NotificationPrefsJson {
+  newWeek: boolean;
+  voteNeeded: boolean;
+  result: boolean;
+  deadline: boolean;
+  awards: boolean;
+  banter: boolean;
+}
+
+/** `GET /groups/:id/week` house-fixture availability for the caller. */
+export interface HouseFixtureJson {
+  allowed: boolean;
+  deadline: number;
+  author: PublicUser | null;
+}
+
+export type ReportReason =
+  | 'nudity'
+  | 'violence'
+  | 'harassment'
+  | 'dangerous'
+  | 'spam'
+  | 'other';
 
 export interface LeaderboardEntryJson {
   user: PublicUser;
   points: number;
   rank: number;
   streak: number;
+}
+
+/** Title-race curve: one entry per member, arrays aligned with `weeks`. */
+export interface RaceWeekJson {
+  id: string;
+  number: number;
+  startsAt: number;
+}
+
+export interface RaceSeriesJson {
+  user: PublicUser;
+  cumulative: number[];
+  perWeek: number[];
+}
+
+export interface RaceJson {
+  weeks: RaceWeekJson[];
+  series: RaceSeriesJson[];
+  me: {
+    bestWeek: { number: number; points: number };
+    avgPerWeek: number;
+    streak: number;
+  };
+}
+
+export interface ReceiptLineJson {
+  label: string;
+  points: number;
+  struck: boolean;
+}
+
+export interface ReceiptJson {
+  week: {
+    id: string;
+    number: number;
+    startsAt: number;
+    endsAt: number;
+    vetoesUsed: number;
+  };
+  club: { name: string; forfeit: string };
+  player: { user: PublicUser; rank: number; rankDelta: number; total: number };
+  lines: ReceiptLineJson[];
+  manOfTheMatch: PublicUser | null;
+  woodenSpoon: PublicUser | null;
+}
+
+export type AwardKey =
+  | 'player_of_the_month'
+  | 'golden_boot'
+  | 'toughest_ref'
+  | 'comeback_kid'
+  | 'first_to_score'
+  | 'wooden_spoon';
+
+export interface AwardWinnerJson {
+  user: PublicUser;
+  value: number;
+}
+
+/** The winner's month, shown on the Player of the Month pennant. */
+export interface PlayerOfTheMonthStats {
+  points: number;
+  goals: number;
+  redCards: number;
+  firstToScore: number;
+  bestWeek: number;
+}
+
+export interface AwardJson {
+  award: AwardKey;
+  winners: PublicUser[];
+  value: number;
+  nominees: AwardWinnerJson[];
+  /** Only Player of the Month carries stats; every other award omits it. */
+  stats?: PlayerOfTheMonthStats;
+}
+
+export interface AwardsJson {
+  month: string | null;
+  awards: AwardJson[];
+}
+
+export interface TrophyJson {
+  groupId: string;
+  groupName: string;
+  month: string;
+  award: AwardKey;
+  value: number;
+}
+
+export interface MonthlyAwardRow {
+  id: string;
+  group_id: string;
+  month: string;
+  award: AwardKey;
+  user_id: string;
+  value: number;
+  created_at: number;
+}
+
+/** One-shot guard: a (group, month) awards run may happen exactly once. */
+export interface MonthlyAwardRunRow {
+  group_id: string;
+  month: string;
+  ran_at: number;
 }
 
 export function toPublicUser(row: UserRow): PublicUser {

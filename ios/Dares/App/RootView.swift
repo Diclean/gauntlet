@@ -20,6 +20,16 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: appState.phase)
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { appState.router.pendingInviteCode != nil && appState.phase == .signedIn },
+                set: { if !$0 { appState.router.pendingInviteCode = nil } }
+            )
+        ) {
+            if let code = appState.router.pendingInviteCode {
+                JoinConfirmView(code: code)
+            }
+        }
         .alert(
             Text("alert.error.title"),
             isPresented: Binding(
